@@ -1,0 +1,17 @@
+{
+  "name": "RHEL Fieldbook",
+  "short_name": "Fieldbook",
+  "description": "A hands-on, zero-to-production learning path for Red Hat Enterprise Linux.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3efe7",
+  "theme_color": "#f3efe7",
+  "icons": [
+    {
+      "src": "assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
