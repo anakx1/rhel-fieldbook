@@ -126,8 +126,8 @@ tar -xzf ~/lab/notes-backup.tar.gz -C ~/lab/restore</code></pre>
     minutes: 16,
     steps: [
       { text: 'Create a project tree with three subdirectories.', cmd: 'mkdir -p ~/lab/fieldbook/{notes,logs,archive}', verify: 'ls -R ~/lab/fieldbook should show all three.' },
-      { text: 'Create three dated notes using brace expansion.', cmd: 'touch ~/lab/fieldbook/notes/day{1..3}.txt' },
-      { text: 'Add a line to the first note and inspect its metadata.', cmd: 'echo "first observation" &gt; ~/lab/fieldbook/notes/day1.txt && stat ~/lab/fieldbook/notes/day1.txt' },
+      { text: 'Create three dated notes using brace expansion.', cmd: 'touch ~/lab/fieldbook/notes/day{1..3}.txt', verify: 'ls ~/lab/fieldbook/notes should show day1.txt, day2.txt, and day3.txt.' },
+      { text: 'Add a line to the first note and inspect its metadata.', cmd: 'echo "first observation" &gt; ~/lab/fieldbook/notes/day1.txt && stat ~/lab/fieldbook/notes/day1.txt', verify: 'stat should show a non-zero size and a recent modification time for day1.txt.' },
       { text: 'Archive the notes directory with gzip and list the archive.', cmd: 'tar -czf ~/lab/fieldbook/archive/notes.tar.gz -C ~/lab/fieldbook notes && tar -tzf ~/lab/fieldbook/archive/notes.tar.gz', verify: 'You should see notes/, notes/day1.txt, and the others.' },
       { text: 'Restore the archive into a clean directory and compare.', cmd: 'mkdir -p ~/lab/fieldbook/restore && tar -xzf ~/lab/fieldbook/archive/notes.tar.gz -C ~/lab/fieldbook/restore && diff -r ~/lab/fieldbook/notes ~/lab/fieldbook/restore/notes', verify: 'diff should print nothing. Silence means the trees match.' }
     ]
@@ -281,11 +281,11 @@ grep -i "failed\|denied" /var/log/secure | tail -n 20</code></pre>
     scenario: 'Use only text tools. The objective is to produce a short answer from a large file without an editor.',
     minutes: 18,
     steps: [
-      { text: 'Count all accounts in /etc/passwd.', cmd: 'wc -l /etc/passwd' },
-      { text: 'List the login shells actually in use, ranked by frequency.', cmd: 'cut -d: -f7 /etc/passwd | sort | uniq -c | sort -nr' },
-      { text: 'List local regular users with UID 1000 or higher.', cmd: 'awk -F: \'$3 &gt;= 1000 { print $1, $3, $7 }\' /etc/passwd' },
+      { text: 'Count all accounts in /etc/passwd.', cmd: 'wc -l /etc/passwd', verify: 'wc -l should print one count, typically between 20 and 60 on a lab VM.' },
+      { text: 'List the login shells actually in use, ranked by frequency.', cmd: 'cut -d: -f7 /etc/passwd | sort | uniq -c | sort -nr', verify: 'The report should rank the login shells in use, usually /bin/bash and /sbin/nologin.' },
+      { text: 'List local regular users with UID 1000 or higher.', cmd: 'awk -F: \'$3 &gt;= 1000 { print $1, $3, $7 }\' /etc/passwd', verify: 'Only accounts with UID 1000 or greater should appear, with username, UID, and shell.' },
       { text: 'Create a tiny log, add an error, and count matching lines.', cmd: 'printf "ok\\nERROR disk full\\nok\\n" &gt; /tmp/demo.log && grep -c "ERROR" /tmp/demo.log', verify: 'The count should be 1.' },
-      { text: 'Save a filtered report while still seeing it on screen.', cmd: 'grep "ERROR" /tmp/demo.log | tee /tmp/error-report.txt' }
+      { text: 'Save a filtered report while still seeing it on screen.', cmd: 'grep "ERROR" /tmp/demo.log | tee /tmp/error-report.txt', verify: 'tee should print the matching lines and create /tmp/error-report.txt; compare both.' }
     ]
   },
   quiz: [
@@ -431,10 +431,10 @@ getent group wheel</code></pre>
     minutes: 18,
     steps: [
       { text: 'Create a group and a user with a home directory and Bash shell.', cmd: 'sudo groupadd ops && sudo useradd -m -s /bin/bash analyst && sudo passwd analyst', verify: 'id analyst should show the account and its groups.' },
-      { text: 'Add the user to the ops group without removing existing memberships.', cmd: 'sudo usermod -aG ops analyst && groups analyst' },
-      { text: 'Verify you can query the account through the name service.', cmd: 'getent passwd analyst' },
+      { text: 'Add the user to the ops group without removing existing memberships.', cmd: 'sudo usermod -aG ops analyst && groups analyst', verify: 'groups analyst should include ops plus every group the account already had.' },
+      { text: 'Verify you can query the account through the name service.', cmd: 'getent passwd analyst', verify: 'getent passwd analyst should return the same entry as /etc/passwd.' },
       { text: 'Create a validated sudoers drop-in granting only the httpd restart command.', cmd: 'echo "%ops ALL=(ALL) /usr/bin/systemctl restart httpd" | sudo tee /etc/sudoers.d/ops-httpd && sudo chmod 0440 /etc/sudoers.d/ops-httpd', verify: 'Run sudo visudo -c to validate all sudoers files.' },
-      { text: 'Inspect password aging and lock the account when finished.', cmd: 'sudo chage -l analyst && sudo passwd -l analyst' }
+      { text: 'Inspect password aging and lock the account when finished.', cmd: 'sudo chage -l analyst && sudo passwd -l analyst', verify: 'chage -l should show the aging policy, and passwd -l should add a locked marker.' }
     ]
   },
   quiz: [
@@ -580,10 +580,10 @@ sudo setfacl -m u:analyst:rw report.txt</code></pre>
     scenario: 'Two groups need controlled access to one directory. Solve it without 777 and without changing the whole filesystem.',
     minutes: 20,
     steps: [
-      { text: 'Create a shared directory and two groups.', cmd: 'sudo mkdir -p /srv/fieldbook && sudo groupadd builders && sudo groupadd auditors' },
+      { text: 'Create a shared directory, two groups, and a builder user.', cmd: 'sudo mkdir -p /srv/fieldbook && sudo groupadd builders && sudo groupadd auditors && sudo useradd -m -s /bin/bash builder && sudo usermod -aG builders builder', verify: 'groupadd and useradd should succeed; id builder should show the builders group.' },
       { text: 'Set ownership and a group-readable/writable mode.', cmd: 'sudo chown root:builders /srv/fieldbook && sudo chmod 2770 /srv/fieldbook', verify: 'ls -ld /srv/fieldbook should show drwxrws--- and the setgid s.' },
-      { text: 'Create a file as a member of builders and confirm group inheritance.', cmd: 'sudo -u builder touch /srv/fieldbook/report.txt && ls -l /srv/fieldbook/report.txt', verify: 'The group should be builders, not the user primary group.' },
-      { text: 'Grant auditors read access with an ACL instead of changing the mode.', cmd: 'sudo setfacl -m g:auditors:r /srv/fieldbook/report.txt && getfacl /srv/fieldbook/report.txt' },
+      { text: 'Create a file as a member of builders and confirm group inheritance.', cmd: 'sudo -u builder touch /srv/fieldbook/report.txt && ls -l /srv/fieldbook/report.txt', verify: 'The owner should be builder and the group should be builders, not the user primary group.' },
+      { text: 'Grant auditors read access with an ACL instead of changing the mode.', cmd: 'sudo setfacl -m g:auditors:r /srv/fieldbook/report.txt && getfacl /srv/fieldbook/report.txt', verify: 'getfacl should show group:auditors:r-- on report.txt without changing the base mode.' },
       { text: 'Verify the base mode, ACL, and effective access.', cmd: 'ls -l /srv/fieldbook/report.txt && getfacl /srv/fieldbook/report.txt', verify: 'A + appears after the mode. The ACL lists auditors with r--.' }
     ]
   },

@@ -31,7 +31,7 @@
     '/home/student/lab/fieldbook/notes/day1.txt': { content: 'first observation', mode: '-rw-r--r--', owner: 'student', group: 'student' },
     '/var': { dir: true, mode: 'drwxr-xr-x', owner: 'root', group: 'root' },
     '/var/log': { dir: true, mode: 'drwxr-xr-x', owner: 'root', group: 'root' },
-    '/var/log/messages': { content: 'Nov 14 09:01:12 rhel-lab systemd[1]: Started Daily apt cleanup.\nNov 14 09:12:03 rhel-lab NetworkManager[810]: <info> device (ens3): state change: activated -> activated\nNov 14 09:14:22 rhel-lab httpd[1842]: [error] AH00027: No authentication done but request not allowed for /secure\nNov 14 09:18:44 rhel-lab sshd[2011]: Failed password for invalid user admin from 203.0.113.44 port 51022 ssh2\nNov 14 09:20:01 rhel-lab systemd[1]: Started Session 4 of User student.\nNov 14 09:25:40 rhel-lab kernel: XFS (dm-0): Mounting V5 Filesystem', mode: '-rw-r-----', owner: 'root', group: 'adm' },
+    '/var/log/messages': { content: 'Nov 14 09:01:12 rhel-lab systemd[1]: Starting dnf makecache...\nNov 14 09:01:14 rhel-lab systemd[1]: dnf-makecache.service: Deactivated successfully.\nNov 14 09:01:14 rhel-lab systemd[1]: Finished dnf makecache.\nNov 14 09:12:03 rhel-lab NetworkManager[810]: <info> device (ens3): state change: activated -> activated\nNov 14 09:14:22 rhel-lab httpd[1842]: [error] AH00027: No authentication done but request not allowed for /secure\nNov 14 09:18:44 rhel-lab sshd[2011]: Failed password for invalid user admin from 203.0.113.44 port 51022 ssh2\nNov 14 09:20:01 rhel-lab systemd[1]: Started Session 4 of User student.\nNov 14 09:25:40 rhel-lab kernel: XFS (dm-0): Mounting V5 Filesystem', mode: '-rw-r-----', owner: 'root', group: 'adm' },
     '/var/log/secure': { content: 'Nov 14 09:17:10 rhel-lab sshd[2009]: Accepted publickey for student from 192.0.2.10 port 44112 ssh2\nNov 14 09:18:44 rhel-lab sshd[2011]: Failed password for invalid user admin from 203.0.113.44 port 51022 ssh2\nNov 14 09:18:46 rhel-lab sshd[2011]: Connection closed by invalid user admin 203.0.113.44 port 51022 [preauth]\nNov 14 09:22:30 rhel-lab sudo[2102]: student : TTY=pts/0 ; PWD=/home/student ; USER=root ; COMMAND=/bin/systemctl status httpd', mode: '-rw-------', owner: 'root', group: 'root' },
     '/var/www': { dir: true, mode: 'drwxr-xr-x', owner: 'root', group: 'root' },
     '/var/www/html': { dir: true, mode: 'drwxr-xr-x', owner: 'root', group: 'root' },
@@ -48,8 +48,7 @@
     '/boot/vmlinuz-5.14.0-427.el9.x86_64': { content: 'kernel image (binary)', mode: '-rw-r--r--', owner: 'root', group: 'root' },
     '/tmp': { dir: true, mode: 'drwxrwxrwt', owner: 'root', group: 'root' },
     '/mnt': { dir: true, mode: 'drwxr-xr-x', owner: 'root', group: 'root' },
-    '/srv': { dir: true, mode: 'drwxr-xr-x', owner: 'root', group: 'root' },
-    '/srv/fieldbook': { dir: true, mode: 'drwxrws---', owner: 'root', group: 'builders' }
+    '/srv': { dir: true, mode: 'drwxr-xr-x', owner: 'root', group: 'root' }
   };
 
   var state = { cwd: '/home/student', oldCwd: '/home/student', effectiveRoot: false, history: [], historyIndex: 0 };
@@ -182,15 +181,130 @@
       return;
     }
 
-    if (/[>]/.test(cmd) && !/2>&1/.test(cmd)) {
+    var redirect = stripRedirects(cmd);
+    if (redirect.blocked) {
       append('sandbox: this shell is read-only. Redirects are disabled here.', 'out amber');
       append('Run the command in your lab VM to write files.', 'out');
       return;
     }
 
-    var result = runPipeline(cmd);
-    appendOutput(result.out, result.error);
+    var result = runPipeline(redirect.cmd);
+    var showOutput = true;
+    if (result.error && redirect.suppressErr) showOutput = false;
+    else if (!result.error && redirect.suppressOut) showOutput = false;
+    if (showOutput) appendOutput(result.out, result.error);
     updatePrompt();
+  }
+
+  /* Remove safe /dev/null redirects and reject writes. This scanner works
+     outside quotes, so grep 'a>b' and echo "2>/dev/null" stay literal. */
+  function stripRedirects(raw) {
+    var out = '';
+    var quote = null;
+    var blocked = false;
+    var suppressOut = false;
+    var suppressErr = false;
+    var i = 0;
+    while (i < raw.length) {
+      var ch = raw.charAt(i);
+      if (quote) {
+        out += ch;
+        if (ch === '\\' && quote === '"' && i + 1 < raw.length) {
+          out += raw.charAt(i + 1);
+          i += 2;
+          continue;
+        }
+        if (ch === quote) quote = null;
+        i++;
+        continue;
+      }
+      if (ch === "'" || ch === '"') {
+        quote = ch;
+        out += ch;
+        i++;
+        continue;
+      }
+      if (ch === '\\') {
+        out += ch;
+        if (i + 1 < raw.length) out += raw.charAt(i + 1);
+        i += 2;
+        continue;
+      }
+      if (ch !== '>') {
+        out += ch;
+        i++;
+        continue;
+      }
+
+      var next = i + 1;
+      if (raw.charAt(next) === '>') {
+        blocked = true;
+        break;
+      }
+      if (raw.charAt(next) === '&' && raw.charAt(next + 1) === '1') {
+        out = out.replace(/(^|\s)[12]\s*$/, '$1');
+        i = next + 2;
+        continue;
+      }
+      var target = next;
+      while (raw.charAt(target) === ' ') target++;
+      if (raw.slice(target, target + 9) === '/dev/null') {
+        if (/2\s*$/.test(out)) {
+          out = out.replace(/2\s*$/, '');
+          suppressErr = true;
+        } else if (/1\s*$/.test(out)) {
+          out = out.replace(/1\s*$/, '');
+          suppressOut = true;
+        } else if (/&\s*$/.test(out)) {
+          out = out.replace(/&\s*$/, '');
+          suppressOut = true;
+          suppressErr = true;
+        } else {
+          suppressOut = true;
+        }
+        i = target + 9;
+        continue;
+      }
+      blocked = true;
+      break;
+    }
+    return { cmd: out.trim(), blocked: blocked, suppressOut: suppressOut, suppressErr: suppressErr };
+  }
+
+  function splitQuoted(text, delimiter) {
+    var out = [];
+    var current = '';
+    var quote = null;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text.charAt(i);
+      if (quote) {
+        current += ch;
+        if (ch === '\\' && quote === '"' && i + 1 < text.length) {
+          current += text.charAt(++i);
+          continue;
+        }
+        if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === "'" || ch === '"') {
+        quote = ch;
+        current += ch;
+        continue;
+      }
+      if (ch === '\\') {
+        current += ch;
+        if (i + 1 < text.length) current += text.charAt(++i);
+        continue;
+      }
+      if (ch === delimiter) {
+        out.push(current);
+        current = '';
+        continue;
+      }
+      current += ch;
+    }
+    out.push(current);
+    return out;
   }
 
   function tokenize(line) {
@@ -204,7 +318,7 @@
   }
 
   function runPipeline(raw) {
-    var stages = raw.split('|');
+    var stages = splitQuoted(raw, '|');
     var input = null;
     var last = { out: '', error: false };
     for (var i = 0; i < stages.length; i++) {
@@ -291,10 +405,313 @@
   }
   function pad(s, n) { s = String(s); return s + ' '.repeat(Math.max(0, n - s.length)); }
 
+  function globToRegExp(pattern, ignoreCase) {
+    var re = '^';
+    for (var i = 0; i < pattern.length; i++) {
+      var ch = pattern.charAt(i);
+      if (ch === '*') re += '.*';
+      else if (ch === '?') re += '.';
+      else re += ch.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    }
+    re += '$';
+    return new RegExp(re, ignoreCase ? 'i' : '');
+  }
+
+  function expandGlobArg(arg) {
+    if (arg.indexOf('*') === -1 && arg.indexOf('?') === -1) return [arg];
+    var slash = arg.lastIndexOf('/');
+    var baseArg = slash === -1 ? '.' : (arg.slice(0, slash) || '/');
+    var pattern = arg.slice(slash + 1);
+    if (!pattern) return [arg];
+    var base = normalize(baseArg);
+    if (!isDir(base)) return [arg];
+    var re = globToRegExp(pattern, false);
+    var matches = children(base).filter(function (child) {
+      return re.test(child.split('/').pop());
+    });
+    return matches.length ? matches : [arg];
+  }
+
+  function modeBits(mode) {
+    var chars = mode.slice(1);
+    var weights = [256, 128, 64, 32, 16, 8, 4, 2, 1];
+    var bits = 0;
+    for (var i = 0; i < 9; i++) {
+      if (chars.charAt(i) && chars.charAt(i) !== '-') bits += weights[i];
+    }
+    if (chars.charAt(2) === 's' || chars.charAt(2) === 'S') bits += 2048;
+    if (chars.charAt(5) === 's' || chars.charAt(5) === 'S') bits += 1024;
+    if (chars.charAt(8) === 't' || chars.charAt(8) === 'T') bits += 512;
+    return bits;
+  }
+
+  function permMatches(mode, spec) {
+    var bits = modeBits(mode);
+    var digits = spec;
+    var kind = 'exact';
+    if (spec.charAt(0) === '-') { kind = 'all'; digits = spec.slice(1); }
+    else if (spec.charAt(0) === '/') { kind = 'any'; digits = spec.slice(1); }
+    var want = parseInt(digits, 8);
+    if (!isFinite(want)) return false;
+    if (kind === 'any') return (bits & want) !== 0;
+    if (kind === 'all') return (bits & want) === want;
+    return bits === want;
+  }
+
+  function sizeMatches(size, spec) {
+    var op = spec.charAt(0);
+    var digits = spec;
+    if (op === '+' || op === '-') digits = spec.slice(1);
+    var unit = 1;
+    var suffix = digits.charAt(digits.length - 1).toUpperCase();
+    if (suffix === 'K') { unit = 1024; digits = digits.slice(0, -1); }
+    else if (suffix === 'M') { unit = 1048576; digits = digits.slice(0, -1); }
+    else if (suffix === 'G') { unit = 1073741824; digits = digits.slice(0, -1); }
+    else if (suffix === 'C') { unit = 1; digits = digits.slice(0, -1); }
+    var n = parseFloat(digits);
+    if (!isFinite(n)) return false;
+    var bytes = Math.ceil(n * unit);
+    if (op === '+') return size > bytes;
+    if (op === '-') return size < bytes;
+    return size === bytes;
+  }
+
+  function findCmd(args) {
+    var paths = [];
+    var argIndex = 0;
+    while (argIndex < args.length && args[argIndex].charAt(0) !== '-') {
+      paths.push(args[argIndex++]);
+    }
+    if (!paths.length) paths.push('.');
+    var expr = args.slice(argIndex);
+    var opt = {
+      name: null, iname: null, path: null, type: null,
+      maxdepth: null, mindepth: 0, perm: null,
+      user: null, group: null, size: null
+    };
+    for (var e = 0; e < expr.length; e++) {
+      var token = expr[e];
+      if (token === '-print' || token === '-print0') continue;
+      if (['-name', '-iname', '-path', '-type', '-maxdepth', '-mindepth', '-perm', '-user', '-group', '-size'].indexOf(token) === -1) {
+        return err('find: unknown predicate ' + token);
+      }
+      var value = expr[++e];
+      if (value === undefined) return err('find: missing argument to ' + token);
+      if (token === '-name') opt.name = value;
+      else if (token === '-iname') opt.iname = value;
+      else if (token === '-path') opt.path = value;
+      else if (token === '-type') opt.type = value;
+      else if (token === '-maxdepth') opt.maxdepth = parseInt(value, 10);
+      else if (token === '-mindepth') opt.mindepth = parseInt(value, 10);
+      else if (token === '-perm') opt.perm = value;
+      else if (token === '-user') opt.user = value;
+      else if (token === '-group') opt.group = value;
+      else if (token === '-size') opt.size = value;
+    }
+    if (opt.maxdepth !== null && !isFinite(opt.maxdepth)) return err('find: invalid maxdepth');
+    if (!isFinite(opt.mindepth)) return err('find: invalid mindepth');
+
+    function matches(path, entry, depth) {
+      if (depth < opt.mindepth) return false;
+      if (opt.maxdepth !== null && depth > opt.maxdepth) return false;
+      if (opt.type) {
+        if (opt.type !== 'f' && opt.type !== 'd') return false;
+        if (opt.type === 'f' && entry.dir) return false;
+        if (opt.type === 'd' && !entry.dir) return false;
+      }
+      var base = path === '/' ? '/' : path.slice(path.lastIndexOf('/') + 1);
+      if (opt.name && !globToRegExp(opt.name, false).test(base)) return false;
+      if (opt.iname && !globToRegExp(opt.iname, true).test(base)) return false;
+      if (opt.path && !globToRegExp(opt.path, false).test(path)) return false;
+      if (opt.perm !== null && !permMatches(entry.mode, opt.perm)) return false;
+      if (opt.user && entry.owner !== opt.user) return false;
+      if (opt.group && entry.group !== opt.group) return false;
+      if (opt.size && !sizeMatches(sizeOf(entry), opt.size)) return false;
+      return true;
+    }
+
+    var lines = [];
+    function visit(path, depth) {
+      var entry = FS[path];
+      if (!entry) return;
+      if (matches(path, entry, depth)) lines.push(path);
+      if (!entry.dir) return;
+      if (opt.maxdepth !== null && depth >= opt.maxdepth) return;
+      children(path).forEach(function (child) { visit(child, depth + 1); });
+    }
+
+    paths.forEach(function (p) {
+      var path = normalize(p);
+      if (!FS[path]) {
+        lines.push('find: \'' + p + '\': No such file or directory');
+        return;
+      }
+      visit(path, 0);
+    });
+    return ok(lines.join('\n'));
+  }
+
+  function du(args) {
+    var humanOut = false;
+    var summarize = false;
+    var all = false;
+    var depth = null;
+    var paths = [];
+    for (var i = 0; i < args.length; i++) {
+      var arg = args[i];
+      if (arg === '--max-depth' && args[i + 1] !== undefined) {
+        depth = parseInt(args[++i], 10);
+        continue;
+      }
+      if (arg.indexOf('--max-depth=') === 0) {
+        depth = parseInt(arg.slice(12), 10);
+        continue;
+      }
+      if (arg.charAt(0) === '-' && arg.length > 1) {
+        var flags = arg.slice(1);
+        for (var j = 0; j < flags.length; j++) {
+          var flag = flags.charAt(j);
+          if (flag === 'h') humanOut = true;
+          else if (flag === 's') summarize = true;
+          else if (flag === 'a') all = true;
+          else if (flag === 'd') {
+            var digits = '';
+            while (j + 1 < flags.length && /\d/.test(flags.charAt(j + 1))) digits += flags.charAt(++j);
+            if (digits) depth = parseInt(digits, 10);
+            else if (args[i + 1] !== undefined) depth = parseInt(args[++i], 10);
+          }
+        }
+        continue;
+      }
+      paths.push(arg);
+    }
+    if (!paths.length) paths.push('.');
+    var expanded = [];
+    paths.forEach(function (p) { expanded = expanded.concat(expandGlobArg(p)); });
+
+    var lines = [];
+    function formatSize(n) {
+      return humanOut ? human(n) : String(Math.ceil(n / 1024));
+    }
+    function totalFor(path) {
+      var entry = FS[path];
+      if (!entry) return 0;
+      if (!entry.dir) return sizeOf(entry);
+      var total = sizeOf(entry);
+      children(path).forEach(function (child) { total += totalFor(child); });
+      return total;
+    }
+    function emit(path) {
+      lines.push(formatSize(totalFor(path)) + '\t' + displayPath(path));
+    }
+    function walk(path, level) {
+      var entry = FS[path];
+      if (!entry) return;
+      if (entry.dir) {
+        children(path).forEach(function (child) {
+          if (depth !== null && level + 1 > depth) return;
+          if (!all && !FS[child].dir) return;
+          walk(child, level + 1);
+        });
+        emit(path);
+      } else if (all || level === 0) {
+        emit(path);
+      }
+    }
+    expanded.forEach(function (p) {
+      var path = normalize(p);
+      if (!FS[path]) {
+        lines.push('du: cannot access \'' + p + '\': No such file or directory');
+        return;
+      }
+      if (summarize) emit(path);
+      else walk(path, 0);
+    });
+    return ok(lines.join('\n'));
+  }
+
+  function namei(args) {
+    var longMode = args.indexOf('-l') !== -1;
+    var operand = null;
+    for (var i = 0; i < args.length; i++) {
+      if (args[i].charAt(0) !== '-') { operand = args[i]; break; }
+    }
+    if (!operand) return err('namei: missing operand');
+    var path = normalize(operand);
+    var lines = ['f: ' + operand];
+
+    function emit(p, name) {
+      var entry = FS[p];
+      if (!entry) {
+        lines.push(' ? ' + name);
+        return false;
+      }
+      if (longMode) lines.push(' ' + entry.mode + ' ' + pad(entry.owner, 8) + pad(entry.group, 8) + name);
+      else lines.push(' ' + (entry.dir ? 'd' : '-') + ' ' + name);
+      return true;
+    }
+
+    var complete = emit('/', '/');
+    var parts = path.split('/').filter(Boolean);
+    var current = '';
+    for (var j = 0; j < parts.length && complete; j++) {
+      current += '/' + parts[j];
+      complete = emit(current, parts[j]);
+    }
+    return complete ? ok(lines.join('\n')) : err(lines.join('\n'));
+  }
+
+  function resolveHost(host) {
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return host;
+    var hosts = FS['/etc/hosts'] ? FS['/etc/hosts'].content : '';
+    var lines = hosts.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].replace(/#.*/, '').trim();
+      if (!line) continue;
+      var parts = line.split(/\s+/);
+      var ip = parts.shift();
+      if (parts.indexOf(host) !== -1) return ip;
+    }
+    return host === 'localhost' ? '127.0.0.1' : null;
+  }
+
+  function ping(args) {
+    var count = 4;
+    var target = null;
+    for (var i = 0; i < args.length; i++) {
+      var arg = args[i];
+      if (arg === '-c' || arg === '--count') {
+        count = parseInt(args[++i], 10);
+        if (!isFinite(count)) count = 4;
+      } else if (/^-c\d+$/.test(arg)) {
+        count = parseInt(arg.slice(2), 10);
+      } else if (['-W', '-i', '-s', '-w', '-t', '-I'].indexOf(arg) !== -1) {
+        i++;
+      } else if (arg.charAt(0) !== '-' && !target) {
+        target = arg;
+      }
+    }
+    if (!target) return err('ping: usage error: Destination address required');
+    var ip = resolveHost(target) || '192.0.2.50';
+    if (count < 1) count = 1;
+    if (count > 10) count = 10;
+    var lines = ['PING ' + target + ' (' + ip + ') 56(84) bytes of data.'];
+    for (var seq = 1; seq <= count; seq++) {
+      lines.push('64 bytes from ' + ip + ': icmp_seq=' + seq + ' ttl=64 time=' + (0.04 + seq * 0.007).toFixed(3) + ' ms');
+    }
+    lines.push('');
+    lines.push('--- ' + target + ' ping statistics ---');
+    lines.push(count + ' packets transmitted, ' + count + ' received, 0% packet loss, time ' + (count * 500) + 'ms');
+    return ok(lines.join('\n'));
+  }
+
   function ls(args, stdin) {
     var flags = args.filter(function (a) { return a.charAt(0) === '-' && a.length > 1; }).join('');
     var paths = args.filter(function (a) { return a.charAt(0) !== '-'; });
     if (!paths.length) paths = ['.'];
+    var expanded = [];
+    paths.forEach(function (p) { expanded = expanded.concat(expandGlobArg(p)); });
+    paths = expanded;
     var long = flags.indexOf('l') !== -1;
     var all = flags.indexOf('a') !== -1;
     var showContext = flags.indexOf('Z') !== -1;
@@ -423,10 +840,28 @@
 
   function sortCmd(args, stdin) {
     var lines = stdin.split('\n');
-    var numeric = args.indexOf('-n') !== -1 || args.indexOf('-nr') !== -1;
-    var reverse = args.indexOf('-r') !== -1 || args.indexOf('-nr') !== -1;
-    var unique = args.indexOf('-u') !== -1;
-    lines.sort(numeric ? function (a, b) { return parseFloat(a) - parseFloat(b); } : function (a, b) { return a.localeCompare(b); });
+    var numeric = false;
+    var reverse = false;
+    var unique = false;
+    var human = false;
+    args.forEach(function (arg) {
+      if (arg.charAt(0) !== '-' || arg.length < 2) return;
+      var flags = arg.slice(1);
+      if (flags.indexOf('n') !== -1) numeric = true;
+      if (flags.indexOf('r') !== -1) reverse = true;
+      if (flags.indexOf('u') !== -1) unique = true;
+      if (flags.indexOf('h') !== -1) human = true;
+    });
+    function humanNumber(line) {
+      var match = String(line).trim().match(/^([0-9.]+)\s*([KMGTP]?)/i);
+      if (!match) return 0;
+      var units = { K: 1024, M: 1048576, G: 1073741824, T: 1099511627776, P: 1125899906842624 };
+      var unit = (match[2] || '').toUpperCase();
+      return parseFloat(match[1]) * (units[unit] || 1);
+    }
+    lines.sort(numeric || human ? function (a, b) {
+      return (human ? humanNumber(a) : parseFloat(a)) - (human ? humanNumber(b) : parseFloat(b));
+    } : function (a, b) { return a.localeCompare(b); });
     if (reverse) lines.reverse();
     if (unique) lines = lines.filter(function (l, i) { return i === 0 || l !== lines[i - 1]; });
     return ok(lines.join('\n'));
@@ -533,12 +968,9 @@
         return ok('TARGET SOURCE                  FSTYPE OPTIONS\n/      /dev/mapper/rhel-root xfs    rw,relatime,seclabel,attr2,inode64\n/app   /dev/mapper/vg_data-lv_app xfs  rw,relatime,seclabel,attr2,inode64');
       case 'mount':
         return ok('sysfs on /sys type sysfs (rw,nosuid,nodev,noexec,relatime,seclabel)\nproc on /proc type proc (rw,nosuid,nodev,noexec,relatime)\n/dev/mapper/rhel-root on / type xfs (rw,relatime,seclabel,attr2,inode64)\n/dev/vda1 on /boot type xfs (rw,relatime,seclabel,attr2,inode64)');
-      case 'du':
-        return ok('4.0K\t' + displayPath(normalize(args[args.length - 1] || '.')));
-      case 'find':
-        return ok('/var/log/messages\n/var/log/secure');
-      case 'namei':
-        return ok('f: /var/www/html/index.html\n drwxr-xr-x root root /\n drwxr-xr-x root root var\n drwxr-xr-x root root www\n drwxr-xr-x root root html\n -rw-r--r-- root root index.html');
+      case 'du': return du(args);
+      case 'find': return findCmd(args);
+      case 'namei': return namei(args);
       case 'ps':
         return ok('UID        PID  PPID  C STIME TTY          TIME CMD\nroot         1     0  0 Nov02 ?        00:01:14 /usr/lib/systemd/systemd --switched-root --system --deserialize 31\nroot       810     1  0 Nov02 ?        00:00:06 /usr/sbin/NetworkManager --no-daemon\nroot      1842     1  0 Nov02 ?        00:00:08 /usr/sbin/httpd -DFOREGROUND\nroot      2011     1  0 Nov02 ?        00:00:02 sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups\nstudent   2401  2398  0 09:22 pts/0    00:00:00 ps -ef');
       case 'top':
@@ -561,8 +993,7 @@
         return nmcli(args);
       case 'getent':
         return getent(args);
-      case 'ping':
-        return ok('PING ' + (args[1] || 'localhost') + ' (' + (args[1] || '127.0.0.1') + ') 56(84) bytes of data.\n64 bytes from ' + (args[1] || '127.0.0.1') + ': icmp_seq=1 ttl=64 time=0.042 ms\n64 bytes from ' + (args[1] || '127.0.0.1') + ': icmp_seq=2 ttl=64 time=0.051 ms\n\n--- ' + (args[1] || 'localhost') + ' ping statistics ---\n2 packets transmitted, 2 received, 0% packet loss, time 1001ms');
+      case 'ping': return ping(args);
       case 'curl':
         return ok('HTTP/1.1 200 OK\nDate: Sat, 14 Nov 2026 09:30:14 GMT\nServer: Apache\nLast-Modified: Sat, 14 Nov 2026 09:02:00 GMT\nContent-Type: text/html; charset=UTF-8');
       case 'firewall-cmd':

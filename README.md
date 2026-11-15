@@ -32,9 +32,9 @@ You can also open `index.html` directly, but serving over HTTP enables the servi
 | Modules | 4 — Orientation, Daily driver, Systems, Operations |
 | Lessons | 16 |
 | Objectives | 80 checkable outcomes |
-| Labs | 16 guided labs, 82 steps with verification prompts |
-| Quiz questions | 48 with explained answers |
-| Command reference | 141 unique commands, linked back to lessons |
+| Labs | 16 guided labs, 82 steps, every step with a verification prompt |
+| Quiz questions | 48 with explained answers and balanced option positions |
+| Command reference | 157 unique commands, linked back to lessons |
 | Storage | Progress is saved in `localStorage` on the device |
 
 ### Level 01 modules
@@ -52,10 +52,12 @@ Each lesson includes objectives, a reading section, a command deck, a hands-on l
 - Progress tracking for lesson completion, objective checklists, lab steps, lab completion, and quiz answers.
 - Command palette (`Ctrl`/`Cmd` + `K`) with keyboard navigation.
 - Searchable and filterable command index and lab library.
+- Export and import progress as a validated JSON file from the Curriculum page.
 - Simulated read-only RHEL terminal sandbox with a virtual filesystem and `help`.
+- Deterministic quiz option shuffling so answer positions stay balanced.
 - Light and dark themes with persistence.
 - Responsive layout for desktop, tablet, and phone.
-- PWA manifest and service worker for offline use after the first visit.
+- PWA manifest, PNG icons, and service worker for offline use after the first visit.
 - Reduced-motion support and visible focus styles.
 
 ## Project layout
@@ -66,26 +68,40 @@ rhel-fieldbook/
 ├── manifest.webmanifest        # PWA metadata
 ├── sw.js                       # Offline cache
 ├── serve.sh                    # Tiny local server helper
+├── scripts/
+│   └── validate-content.js     # Dependency-free content checks
 └── assets/
     ├── css/style.css           # Design system and responsive rules
     ├── favicon.svg
+    ├── icons/                  # 192/512 PNG and maskable PWA icons
     └── js/
         ├── data.js             # Levels, modules, lessons order, certifications
         ├── lessons-orientation.js
         ├── lessons-operations.js
         ├── lessons-systems.js
         ├── lessons-practice.js
+        ├── quiz-order.js       # Deterministic, balanced quiz option order
         ├── sandbox.js          # Simulated terminal and virtual filesystem
         └── app.js              # Routing, rendering, state, filters, palette
 ```
 
-Scripts load in order: data → lesson modules → sandbox → app.
+Scripts load in order: data → lesson modules → quiz order → sandbox → app.
 
 ## Editing content
 
 Lesson content lives in the four `lessons-*.js` files. A lesson is a key in `RHEL.lessons` with `title`, `module`, `objectives`, `sections`, `commands`, `lab`, and `quiz`. Add the lesson id to the relevant module and `RHEL.lessonOrder` in `data.js` so navigation, progress, and the command index pick it up.
 
 When changing cached assets, bump `CACHE` in `sw.js` so returning visitors receive the new files.
+
+## Validate content
+
+Run the dependency-free content validator after editing lessons or quiz data:
+
+```bash
+node scripts/validate-content.js
+```
+
+It checks that every lesson id exists and is mapped to a module, quiz answer indices are in range, command cards are unique, every lab step has a verification prompt, and the rendered quiz answer positions stay balanced. The command exits non-zero on failure.
 
 ## Notes and limits
 

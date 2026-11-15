@@ -1280,6 +1280,23 @@ body.nav-open .menu-toggle span:last-child { transform: translateY(-3.75px) rota
 .curriculum-head h2 { margin: 0; font-family: var(--font-display); font-size: clamp(30px, 4vw, 44px); font-weight: 400; letter-spacing: -0.035em; }
 .curriculum-head p { max-width: 430px; margin: 0; color: var(--muted); font-size: 12.5px; text-align: right; }
 
+.progress-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  margin-top: 24px;
+  padding: 15px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-raised);
+}
+.progress-tools-copy { display: grid; gap: 3px; }
+.progress-tools-copy strong { color: var(--ink); font-size: 12.5px; }
+.progress-tools-copy span { color: var(--muted); font-size: 10.5px; }
+.progress-tools-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.progress-tools-actions .text-link { margin-right: 6px; }
+
 .module-block {
   margin-bottom: 20px;
   border: 1px solid var(--line);
@@ -2461,6 +2478,8 @@ body.sandbox-open .sandbox-toggle { opacity: 0; pointer-events: none; transform:
   .toast { bottom: 70px; }
   .curriculum-head { flex-direction: column; align-items: flex-start; }
   .curriculum-head p { text-align: left; }
+  .progress-tools { flex-direction: column; align-items: flex-start; }
+  .progress-tools-actions { width: 100%; }
   .module-block-head { grid-template-columns: 42px minmax(0, 1fr); padding: 18px; }
   .module-block-meta { display: none; }
   .module-block-num { font-size: 28px; }

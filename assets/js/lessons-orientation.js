@@ -112,9 +112,9 @@ hostnamectl</code></pre>
     minutes: 12,
     steps: [
       { text: 'Boot your RHEL lab VM or connect to your cloud instance. Confirm you are on the intended host.', cmd: 'hostnamectl', verify: 'Verify the hostname, operating system, and kernel are what you expect.' },
-      { text: 'Read the short and structured release files. Note the major version.', cmd: 'cat /etc/redhat-release && cat /etc/os-release' },
-      { text: 'Check the kernel and CPU architecture.', cmd: 'uname -r && uname -m' },
-      { text: 'Confirm the package manager generation.', cmd: 'dnf --version' },
+      { text: 'Read the short and structured release files. Note the major version.', cmd: 'cat /etc/redhat-release && cat /etc/os-release', verify: 'Both files should identify Red Hat Enterprise Linux 9.x and agree on the major version.' },
+      { text: 'Check the kernel and CPU architecture.', cmd: 'uname -r && uname -m', verify: 'uname -r prints the kernel release and uname -m prints x86_64 on a standard lab VM.' },
+      { text: 'Confirm the package manager generation.', cmd: 'dnf --version', verify: 'dnf --version should report dnf 4.x, confirming the RPM package stack.' },
       { text: 'Take a hypervisor or cloud snapshot named clean-install. If you cannot snapshot, record how you would rebuild the machine.', verify: 'You should be able to return to this exact state after a failed lab.' }
     ]
   },
@@ -248,7 +248,7 @@ echo '$HOME'</code></pre>
   ],
   commands: [
     { cmd: 'whoami', desc: 'Print the effective username.', category: 'Shell' },
-    { cmd: 'hostnamectl', desc: 'Show hostname and operating system details.', category: 'Shell' },
+    { cmd: 'hostnamectl status', desc: 'Show hostname and operating system details.', category: 'Shell' },
     { cmd: 'pwd', desc: 'Print the current working directory.', category: 'Filesystem' },
     { cmd: 'uptime', desc: 'Show uptime, logged-in users, and load averages.', category: 'Processes' },
     { cmd: 'echo "$HOME"', desc: 'Print a value with variable expansion.', category: 'Shell' },
@@ -264,9 +264,9 @@ echo '$HOME'</code></pre>
     steps: [
       { text: 'Run the identity check and confirm the prompt matches reality.', cmd: 'whoami && hostname && pwd', verify: 'The username and hostname should match the prompt; pwd should be your home directory.' },
       { text: 'Inspect system uptime and load averages.', cmd: 'uptime', verify: 'The load averages are three numbers: 1, 5, and 15 minutes.' },
-      { text: 'Print your home directory using both single and double quotes. Compare the output.', cmd: 'echo "$HOME" && echo \'$HOME\'' },
+      { text: 'Print your home directory using both single and double quotes. Compare the output.', cmd: 'echo "$HOME" && echo \'$HOME\'', verify: 'Double quotes expand $HOME, while single quotes print it literally; the two outputs should differ.' },
       { text: 'Find out whether cd is a shell builtin or an external binary.', cmd: 'type cd', verify: 'It should report that cd is a shell builtin.' },
-      { text: 'Inspect your last commands and re-run one using history expansion.', cmd: 'history | tail -n 5' }
+      { text: 'Inspect your last commands and re-run one using history expansion.', cmd: 'history | tail -n 5', verify: 'history should list recent commands with numbers, and the expansion should run one of them again.' }
     ]
   },
   quiz: [
@@ -401,8 +401,8 @@ dnf provides '*/sshd'</code></pre>
       { text: 'Read the synopsis of cp and find the option that preserves timestamps and mode.', cmd: 'man cp', verify: 'Look for -p, --preserve. The synopsis should make sense now.' },
       { text: 'Read the fstab file-format page and find the sixth field.', cmd: 'man 5 fstab', verify: 'The sixth field controls fsck pass order; root is usually 1, others 2 or 0.' },
       { text: 'Search manual descriptions for the word "quota".', cmd: 'man -k quota', verify: 'You should see several administration and file-format pages.' },
-      { text: 'Find out which installed package owns sshd.', cmd: 'command -v sshd && rpm -qf "$(command -v sshd)"' },
-      { text: 'Locate the local documentation directory for a package you have installed.', cmd: 'ls /usr/share/doc | head' }
+      { text: 'Find out which installed package owns sshd.', cmd: 'command -v sshd && rpm -qf "$(command -v sshd)"', verify: 'command -v sshd should print a path such as /usr/sbin/sshd, and rpm -qf should name openssh-server.' },
+      { text: 'Locate the local documentation directory for a package you have installed.', cmd: 'ls /usr/share/doc | head', verify: 'The directory should exist under /usr/share/doc and contain the package documentation.' }
     ]
   },
   quiz: [
@@ -529,7 +529,7 @@ lsblk -f</code></pre>
     }
   ],
   commands: [
-    { cmd: 'pwd', desc: 'Print the current working directory.', category: 'Filesystem' },
+    { cmd: 'pwd -P', desc: 'Print the physical working directory path.', category: 'Filesystem' },
     { cmd: 'cd /var/log', desc: 'Change to an absolute directory path.', category: 'Filesystem' },
     { cmd: 'cd -', desc: 'Return to the previous directory.', category: 'Filesystem' },
     { cmd: 'ls -lah', desc: 'List all files, long format, human-readable sizes.', category: 'Filesystem' },
@@ -547,7 +547,7 @@ lsblk -f</code></pre>
       { text: 'Identify the filesystem backing / and its usage.', cmd: 'findmnt / && df -hT /', verify: 'The device and filesystem type should match between the two commands.' },
       { text: 'Inspect /var/log as a directory entry, then list its contents.', cmd: 'ls -ld /var/log && ls -lh /var/log | head', verify: 'The first command describes the directory; the second describes its files.' },
       { text: 'Find the ten largest entries directly under /var.', cmd: 'du -sh /var/* 2>/dev/null | sort -rh | head', verify: 'du can take time on a busy host; note which directory is largest.' },
-      { text: 'Return to your home directory and confirm where you are.', cmd: 'cd ~ && pwd' }
+      { text: 'Return to your home directory and confirm where you are.', cmd: 'cd ~ && pwd', verify: 'pwd should print /home/<user>, and cd ~ should return there from any directory.' }
     ]
   },
   quiz: [

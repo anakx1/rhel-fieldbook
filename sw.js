@@ -1,5 +1,5 @@
 /* RHEL Fieldbook — offline cache */
-const CACHE = 'rhel-fieldbook-v5';
+const CACHE = 'rhel-fieldbook-v6';
 const CORE = [
   './',
   './index.html',
@@ -9,9 +9,13 @@ const CORE = [
   './assets/js/lessons-operations.js',
   './assets/js/lessons-systems.js',
   './assets/js/lessons-practice.js',
+  './assets/js/quiz-order.js',
   './assets/js/sandbox.js',
   './assets/js/app.js',
   './assets/favicon.svg',
+  './assets/icons/icon-192.png',
+  './assets/icons/icon-512.png',
+  './assets/icons/icon-maskable-512.png',
   './manifest.webmanifest'
 ];
 

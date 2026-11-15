@@ -116,10 +116,10 @@ systemd-cgtop</code></pre>
     minutes: 12,
     steps: [
       { text: 'Start a long sleep in the background.', cmd: 'sleep 600 &amp;', verify: 'The shell prints a job number and PID.' },
-      { text: 'List jobs and locate the process independently.', cmd: 'jobs && pgrep -a sleep' },
-      { text: 'Inspect the process parent and state.', cmd: 'ps -o pid,ppid,stat,etime,cmd -p $(pgrep -n sleep)' },
-      { text: 'Send SIGTERM and confirm it exits.', cmd: 'kill -TERM $(pgrep -n sleep) && jobs' },
-      { text: 'Check memory and load for context.', cmd: 'free -h && uptime' }
+      { text: 'List jobs and locate the process independently.', cmd: 'jobs && pgrep -a sleep', verify: 'jobs shows the sleep job, and pgrep -a sleep shows the same PID and command.' },
+      { text: 'Inspect the process parent and state.', cmd: 'ps -o pid,ppid,stat,etime,cmd -p $(pgrep -n sleep)', verify: 'ps should show the sleep process, its parent PID, and a sleeping state.' },
+      { text: 'Send SIGTERM and confirm it exits.', cmd: 'kill -TERM $(pgrep -n sleep) && jobs', verify: 'After SIGTERM, the sleep process should disappear and jobs should no longer list it.' },
+      { text: 'Check memory and load for context.', cmd: 'free -h && uptime', verify: 'free -h should report memory and swap, and uptime should report the load averages.' }
     ]
   },
   quiz: [
@@ -245,13 +245,13 @@ dnf module info nodejs</code></pre>
     { cmd: 'dnf repolist', desc: 'List enabled repositories.', category: 'Packages' },
     { cmd: 'dnf search httpd', desc: 'Search package names and summaries.', category: 'Packages' },
     { cmd: 'dnf info httpd', desc: 'Show package metadata and source repository.', category: 'Packages' },
-    { cmd: 'dnf provides */sshd', desc: 'Find a package that supplies a file or command.', category: 'Packages' },
+    { cmd: 'dnf provides /usr/sbin/sshd', desc: 'Find a package that supplies a file or command.', category: 'Packages' },
     { cmd: 'sudo dnf install httpd', desc: 'Install a package and its dependencies.', category: 'Packages' },
     { cmd: 'sudo dnf remove httpd', desc: 'Remove a package and unneeded dependencies.', category: 'Packages' },
     { cmd: 'sudo dnf update openssl', desc: 'Update a specific package.', category: 'Packages' },
     { cmd: 'dnf check-update', desc: 'Preview available updates.', category: 'Packages' },
     { cmd: 'rpm -qa', desc: 'List all installed packages.', category: 'Packages' },
-    { cmd: 'rpm -qf /usr/sbin/sshd', desc: 'Find the package that owns a file.', category: 'Packages' },
+    { cmd: 'rpm -qi openssh-server', desc: 'Show installed package metadata.', category: 'Packages' },
     { cmd: 'rpm -V httpd', desc: 'Verify installed files against package metadata.', category: 'Packages' },
     { cmd: 'dnf history', desc: 'List package transactions.', category: 'Packages' }
   ],
@@ -261,10 +261,10 @@ dnf module info nodejs</code></pre>
     minutes: 18,
     steps: [
       { text: 'Confirm repositories are available and locate httpd.', cmd: 'dnf repolist && dnf info httpd', verify: 'Note the repository name, version, and architecture.' },
-      { text: 'Install httpd, reading the transaction summary before confirming.', cmd: 'sudo dnf install httpd' },
-      { text: 'Find the package owner of the main binary and list package files.', cmd: 'rpm -qf /usr/sbin/httpd && rpm -ql httpd | head -n 20' },
-      { text: 'Query the service unit and configuration file ownership.', cmd: 'rpm -ql httpd | grep -E "(service|conf)$"' },
-      { text: 'Review the transaction history and remove the package.', cmd: 'dnf history | head && sudo dnf remove httpd' }
+      { text: 'Install httpd, reading the transaction summary before confirming.', cmd: 'sudo dnf install httpd', verify: 'Review the transaction summary, confirm with y, and dnf should report httpd installed.' },
+      { text: 'Find the package owner of the main binary and list package files.', cmd: 'rpm -qf /usr/sbin/httpd && rpm -ql httpd | head -n 20', verify: 'rpm -qf should name httpd, and rpm -ql should list the files it owns.' },
+      { text: 'Query the service unit and configuration file ownership.', cmd: 'rpm -ql httpd | grep -E "(service|conf)$"', verify: 'The output should include the httpd systemd unit and httpd.conf paths.' },
+      { text: 'Review the transaction history and remove the package.', cmd: 'dnf history | head && sudo dnf remove httpd', verify: 'dnf history should show the install; after removal, rpm -q httpd should report not installed.' }
     ]
   },
   quiz: [
@@ -394,7 +394,7 @@ systemctl list-units --type=service --state=running</code></pre>
     { cmd: 'sudo systemctl daemon-reload', desc: 'Reload unit definitions after editing them.', category: 'Services' },
     { cmd: 'systemctl --failed', desc: 'List units that failed to start.', category: 'Services' },
     { cmd: 'journalctl -u sshd --since "1 hour ago"', desc: 'Read recent logs for one unit.', category: 'Services' },
-    { cmd: 'journalctl -p err -b', desc: 'Show error-priority messages from this boot.', category: 'Services' },
+    { cmd: 'journalctl -p err -b -u sshd', desc: 'Show error-priority messages for one service.', category: 'Services' },
     { cmd: 'systemctl get-default', desc: 'Show the default boot target.', category: 'Services' }
   ],
   lab: {
@@ -403,10 +403,10 @@ systemctl list-units --type=service --state=running</code></pre>
     minutes: 14,
     steps: [
       { text: 'Inspect SSH state and boot posture.', cmd: 'systemctl status sshd && systemctl is-enabled sshd', verify: 'Note active vs enabled separately.' },
-      { text: 'Read the last 20 journal lines for SSH.', cmd: 'journalctl -u sshd -n 20 --no-pager' },
+      { text: 'Read the last 20 journal lines for SSH.', cmd: 'journalctl -u sshd -n 20 --no-pager', verify: 'The journal should show sshd startup or connection entries with no permission errors.' },
       { text: 'List every failed unit on the system.', cmd: 'systemctl --failed', verify: 'An empty list is a valid and useful result.' },
-      { text: 'Show the default boot target and running services.', cmd: 'systemctl get-default && systemctl list-units --type=service --state=running | head' },
-      { text: 'Install a service package, enable it, verify it, then disable it.', cmd: 'sudo dnf install -y httpd && sudo systemctl enable --now httpd && systemctl is-active httpd && sudo systemctl disable --now httpd' }
+      { text: 'Show the default boot target and running services.', cmd: 'systemctl get-default && systemctl list-units --type=service --state=running | head', verify: 'get-default should print a target such as multi-user.target, and running services should be listed.' },
+      { text: 'Install a service package, enable it, verify it, then disable it.', cmd: 'sudo dnf install -y httpd && sudo systemctl enable --now httpd && systemctl is-active httpd && sudo systemctl disable --now httpd', verify: 'is-active should print active after enable --now, then inactive after disable --now.' }
     ]
   },
   quiz: [
@@ -540,9 +540,9 @@ sudo firewall-cmd --list-services</code></pre>
     minutes: 18,
     steps: [
       { text: 'Record interfaces, addresses, and default route.', cmd: 'ip -br addr && ip route', verify: 'Identify the interface with the default gateway.' },
-      { text: 'Inspect NetworkManager device and connection state.', cmd: 'nmcli device status && nmcli -f NAME,DEVICE,STATE connection show' },
-      { text: 'Check whether a web server is listening and on which address.', cmd: 'sudo ss -tlnp | grep -E ":(80|443)\\b"' },
-      { text: 'Test DNS resolution through the system resolver.', cmd: 'getent hosts localhost' },
+      { text: 'Inspect NetworkManager device and connection state.', cmd: 'nmcli device status && nmcli -f NAME,DEVICE,STATE connection show', verify: 'nmcli should show ens3 connected and the active connection name.' },
+      { text: 'Check whether a web server is listening and on which address.', cmd: 'sudo ss -tlnp | grep -E ":(80|443)\\b"', verify: 'ss -tlnp should show a LISTEN socket on port 80 or 443 if a web server is running.' },
+      { text: 'Test DNS resolution through the system resolver.', cmd: 'getent hosts localhost', verify: 'getent hosts localhost should resolve to 127.0.0.1 and ::1.' },
       { text: 'Inspect the firewall zone and list allowed services.', cmd: 'sudo firewall-cmd --get-active-zones && sudo firewall-cmd --list-all', verify: 'If http is missing, that is a candidate cause — but confirm the listener first.' }
     ]
   },

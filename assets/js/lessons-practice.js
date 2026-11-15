@@ -106,10 +106,10 @@ df -h /app</code></pre>
     }
   ],
   commands: [
-    { cmd: 'lsblk -f', desc: 'Show block devices, filesystems, UUIDs, and mounts.', category: 'Storage' },
+    { cmd: 'lsblk -f -o NAME,FSTYPE,LABEL,UUID,MOUNTPOINTS', desc: 'Show a focused block-device and filesystem table.', category: 'Storage' },
     { cmd: 'blkid', desc: 'Show filesystem UUIDs and types.', category: 'Storage' },
     { cmd: 'findmnt /data', desc: 'Show the mount source, target, and options.', category: 'Storage' },
-    { cmd: 'df -hT', desc: 'Show mounted filesystem capacity and type.', category: 'Storage' },
+    { cmd: 'df -hT -x tmpfs -x devtmpfs', desc: 'Show real filesystem capacity and type.', category: 'Storage' },
     { cmd: 'df -i', desc: 'Check inode consumption.', category: 'Storage' },
     { cmd: 'du -xhd1 /var', desc: 'Show directory usage without crossing mounts.', category: 'Storage' },
     { cmd: 'sudo mount UUID=... /mnt/data', desc: 'Mount a filesystem by UUID.', category: 'Storage' },
@@ -126,8 +126,8 @@ df -h /app</code></pre>
     steps: [
       { text: 'Inspect the current storage map and capacity.', cmd: 'lsblk -f && df -hT', verify: 'Identify which filesystem holds / and what else is mounted.' },
       { text: 'Create a 64 MB file and format it as XFS.', cmd: 'dd if=/dev/zero of=/tmp/lab-disk.img bs=1M count=64 status=progress && sudo mkfs.xfs /tmp/lab-disk.img', verify: 'mkfs refuses if the target already has a filesystem; that is a feature.' },
-      { text: 'Mount it on a new directory and inspect the mount.', cmd: 'sudo mkdir -p /mnt/labdisk && sudo mount -o loop /tmp/lab-disk.img /mnt/labdisk && findmnt /mnt/labdisk' },
-      { text: 'Write data, check usage, and calculate directory consumption.', cmd: 'sudo dd if=/dev/zero of=/mnt/labdisk/fill bs=1M count=20 && df -h /mnt/labdisk && du -sh /mnt/labdisk' },
+      { text: 'Mount it on a new directory and inspect the mount.', cmd: 'sudo mkdir -p /mnt/labdisk && sudo mount -o loop /tmp/lab-disk.img /mnt/labdisk && findmnt /mnt/labdisk', verify: 'findmnt /mnt/labdisk should show the loop device and XFS filesystem type.' },
+      { text: 'Write data, check usage, and calculate directory consumption.', cmd: 'sudo dd if=/dev/zero of=/mnt/labdisk/fill bs=1M count=20 && df -h /mnt/labdisk && du -sh /mnt/labdisk', verify: 'df should show the new filesystem with used space, and du should report the fill file.' },
       { text: 'Unmount and remove the file-backed disk.', cmd: 'sudo umount /mnt/labdisk && rm /tmp/lab-disk.img && sudo rmdir /mnt/labdisk', verify: 'findmnt /mnt/labdisk should return nothing.' }
     ]
   },
@@ -302,7 +302,7 @@ wc -l "$report"</code></pre>
     { cmd: 'set -euo pipefail', desc: 'Fail fast on errors, unset variables, and pipeline failures.', category: 'Bash' },
     { cmd: 'chmod +x script.sh', desc: 'Make a script executable.', category: 'Bash' },
     { cmd: './script.sh', desc: 'Run a script from the current directory.', category: 'Bash' },
-    { cmd: 'echo "$HOME"', desc: 'Expand a variable safely in double quotes.', category: 'Bash' },
+    { cmd: 'echo $HOME', desc: 'Expand a variable in the shell.', category: 'Bash' },
     { cmd: 'name=$(command)', desc: 'Capture command output in a variable.', category: 'Bash' },
     { cmd: '[[ -f "$file" ]]', desc: 'Test whether a path is a regular file.', category: 'Bash' },
     { cmd: 'for item in "$@"; do ...; done', desc: 'Loop over arguments safely.', category: 'Bash' },
@@ -314,10 +314,10 @@ wc -l "$report"</code></pre>
     scenario: 'Create a reusable script that another admin could run without reading the source first.',
     minutes: 22,
     steps: [
-      { text: 'Create the script with a shebang and strict mode.', cmd: 'mkdir -p ~/bin && $EDITOR ~/bin/healthcheck.sh' },
+      { text: 'Create the script with a shebang and strict mode.', cmd: 'mkdir -p ~/bin && $EDITOR ~/bin/healthcheck.sh', verify: 'The script should exist at ~/bin/healthcheck.sh and start with #!/bin/bash and set -euo pipefail.' },
       { text: 'Add host, date, kernel, disk, failed-unit, and recent-error sections. Redirect the block to a timestamped file.', verify: 'Use the complete example above. Quote every variable expansion.' },
-      { text: 'Make it executable and run it.', cmd: 'chmod +x ~/bin/healthcheck.sh && ~/bin/healthcheck.sh' },
-      { text: 'Verify the report exists and has content.', cmd: 'ls -lh ~/health && head -n 20 ~/health/health-*.txt' },
+      { text: 'Make it executable and run it.', cmd: 'chmod +x ~/bin/healthcheck.sh && ~/bin/healthcheck.sh', verify: 'The script should run without errors and print the report path or a summary.' },
+      { text: 'Verify the report exists and has content.', cmd: 'ls -lh ~/health && head -n 20 ~/health/health-*.txt', verify: 'The report file should exist under ~/health and include host, date, and disk sections.' },
       { text: 'Break it on purpose: run it with an unwritable report directory and observe the non-zero exit.', cmd: '~/bin/healthcheck.sh /root/not-allowed; echo "exit: $?"', verify: 'The exit status should be non-zero, and the error should be visible.' }
     ]
   },
@@ -476,12 +476,12 @@ sudo firewall-cmd --reload</code></pre>
     scenario: 'Deploy content into a web root and diagnose a context mismatch without turning off the control.',
     minutes: 22,
     steps: [
-      { text: 'Confirm SELinux is enforcing and record the current mode.', cmd: 'getenforce && sestatus' },
-      { text: 'Install httpd and start it.', cmd: 'sudo dnf install -y httpd && sudo systemctl enable --now httpd && systemctl is-active httpd' },
-      { text: 'Create content in /var/www/html and inspect its context.', cmd: 'echo "hello from RHEL" | sudo tee /var/www/html/index.html && ls -Z /var/www/html/index.html' },
+      { text: 'Confirm SELinux is enforcing and record the current mode.', cmd: 'getenforce && sestatus', verify: 'getenforce should print Enforcing, and sestatus should confirm the targeted policy.' },
+      { text: 'Install httpd and start it.', cmd: 'sudo dnf install -y httpd && sudo systemctl enable --now httpd && systemctl is-active httpd', verify: 'systemctl is-active httpd should print active.' },
+      { text: 'Create content in /var/www/html and inspect its context.', cmd: 'echo "hello from RHEL" | sudo tee /var/www/html/index.html && ls -Z /var/www/html/index.html', verify: 'ls -Z should show httpd_sys_content_t for the new index.html.' },
       { text: 'Copy a file from your home directory into the web root and compare contexts.', cmd: 'echo "copied" &gt; ~/copied.html && sudo cp ~/copied.html /var/www/html/copied.html && ls -Z /var/www/html/copied.html', verify: 'The copied file may retain a home-directory type such as user_home_t.' },
       { text: 'Restore the correct web content context and verify.', cmd: 'sudo restorecon -Rv /var/www/html && ls -Z /var/www/html/copied.html', verify: 'The file should now be httpd_sys_content_t.' },
-      { text: 'Check for denials and inspect the firewall.', cmd: 'sudo ausearch -m AVC -ts recent; sudo firewall-cmd --list-all' }
+      { text: 'Check for denials and inspect the firewall.', cmd: 'sudo ausearch -m AVC -ts recent; sudo firewall-cmd --list-all', verify: 'ausearch should show no recent AVC denials, and firewall-cmd should list the public zone.' }
     ]
   },
   quiz: [
@@ -615,16 +615,16 @@ ls -lZ /var/www/html/index.html</code></pre>
     }
   ],
   commands: [
-    { cmd: 'uptime', desc: 'Check load averages and uptime.', category: 'Troubleshooting' },
-    { cmd: 'systemctl --failed', desc: 'List units that failed to start.', category: 'Troubleshooting' },
-    { cmd: 'journalctl -p err -b', desc: 'Show error-priority messages from this boot.', category: 'Troubleshooting' },
-    { cmd: 'df -hT', desc: 'Check filesystem capacity and type.', category: 'Troubleshooting' },
-    { cmd: 'df -i', desc: 'Check inode exhaustion.', category: 'Troubleshooting' },
-    { cmd: 'free -h', desc: 'Check memory and swap pressure.', category: 'Troubleshooting' },
+    { cmd: 'uptime -p', desc: 'Show a concise uptime summary.', category: 'Troubleshooting' },
+    { cmd: 'systemctl list-units --state=failed', desc: 'List units that failed to start.', category: 'Troubleshooting' },
+    { cmd: 'journalctl -p err -b --no-pager', desc: 'Show error-priority messages from this boot.', category: 'Troubleshooting' },
+    { cmd: 'df -hT -x tmpfs', desc: 'Check filesystem capacity and type.', category: 'Troubleshooting' },
+    { cmd: 'df -i /', desc: 'Check inode exhaustion on the root filesystem.', category: 'Troubleshooting' },
+    { cmd: 'free -h -w', desc: 'Check memory and swap pressure.', category: 'Troubleshooting' },
     { cmd: 'ip -br addr', desc: 'Show a compact interface and address summary.', category: 'Troubleshooting' },
-    { cmd: 'ss -tulpn', desc: 'List listening sockets and owning processes.', category: 'Troubleshooting' },
+    { cmd: 'ss -tulpn state listening', desc: 'List listening sockets and owning processes.', category: 'Troubleshooting' },
     { cmd: 'namei -l /path', desc: 'Trace permissions on every path component.', category: 'Troubleshooting' },
-    { cmd: 'sudo ausearch -m AVC -ts recent', desc: 'Find recent SELinux denials.', category: 'Troubleshooting' },
+    { cmd: 'sudo ausearch -m AVC -ts today', desc: 'Find recent SELinux denials.', category: 'Troubleshooting' },
     { cmd: 'sudo dnf history', desc: 'Review recent package changes.', category: 'Troubleshooting' }
   ],
   lab: {
@@ -632,11 +632,11 @@ ls -lZ /var/www/html/index.html</code></pre>
     scenario: 'Perform a non-destructive health assessment and write a three-line situation report from the evidence.',
     minutes: 15,
     steps: [
-      { text: 'Capture system identity, uptime, and load.', cmd: 'hostnamectl && uptime' },
-      { text: 'List failed units and recent error-priority journal entries.', cmd: 'systemctl --failed; journalctl -p err -b --no-pager | tail -n 20' },
-      { text: 'Check capacity, inodes, and memory.', cmd: 'df -hT; df -i; free -h' },
-      { text: 'Check addresses, routes, and listening sockets.', cmd: 'ip -br addr; ip route; sudo ss -tulpn' },
-      { text: 'Review the last package transactions for recent change.', cmd: 'sudo dnf history | head -n 10' },
+      { text: 'Capture system identity, uptime, and load.', cmd: 'hostnamectl && uptime', verify: 'The output should identify the host, its uptime, and the current load averages.' },
+      { text: 'List failed units and recent error-priority journal entries.', cmd: 'systemctl --failed; journalctl -p err -b --no-pager | tail -n 20', verify: 'The failed-unit list should be empty or explain the failure; the journal should show recent errors.' },
+      { text: 'Check capacity, inodes, and memory.', cmd: 'df -hT; df -i; free -h', verify: 'No filesystem should be near 100 percent; note inode use and available memory.' },
+      { text: 'Check addresses, routes, and listening sockets.', cmd: 'ip -br addr; ip route; sudo ss -tulpn', verify: 'Confirm the interface, the default route, and the listening ports.' },
+      { text: 'Review the last package transactions for recent change.', cmd: 'sudo dnf history | head -n 10', verify: 'dnf history should show the most recent transactions and their dates.' },
       { text: 'Write a three-line report: impact, evidence, next action. Keep it factual and time-stamped.', verify: 'If nothing is wrong, say so and include the evidence you checked.' }
     ]
   },

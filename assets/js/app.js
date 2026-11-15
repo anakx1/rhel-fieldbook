@@ -22,6 +22,7 @@
     objectives: {},
     labSteps: {},
     quiz: {},
+    quizVersion: 2,
     labsDone: [],
     lastLesson: null,
     lastVisit: null
@@ -34,14 +35,46 @@
      ------------------------------------------------------------------------ */
 
   function loadState() {
+    var loaded;
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return Object.assign({}, DEFAULT_STATE);
-      var parsed = JSON.parse(raw);
-      return Object.assign({}, DEFAULT_STATE, parsed);
+      loaded = raw ? Object.assign({}, DEFAULT_STATE, JSON.parse(raw)) : Object.assign({}, DEFAULT_STATE);
     } catch (e) {
-      return Object.assign({}, DEFAULT_STATE);
+      loaded = Object.assign({}, DEFAULT_STATE);
     }
+    var migrated = migrateState(loaded);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated)); } catch (e) {}
+    return migrated;
+  }
+
+  /* Older saves stored quiz answers by the original option index. That is
+     still the storage format after the render-time shuffle, so valid answers
+     are preserved and anything malformed is dropped instead of breaking the
+     lesson renderer. */
+  function migrateState(input) {
+    var s = Object.assign({}, DEFAULT_STATE, input || {});
+    if (!s.quiz || typeof s.quiz !== 'object' || Array.isArray(s.quiz)) s.quiz = {};
+    Object.keys(s.quiz).forEach(function (lessonId) {
+      var lesson = RHEL.lessons[lessonId];
+      var answers = s.quiz[lessonId];
+      if (!lesson || !lesson.quiz || !answers || typeof answers !== 'object' || Array.isArray(answers)) {
+        delete s.quiz[lessonId];
+        return;
+      }
+      var clean = {};
+      Object.keys(answers).forEach(function (key) {
+        var qi = parseInt(key, 10);
+        var oi = parseInt(answers[key], 10);
+        var question = lesson.quiz[qi];
+        if (!isFinite(qi) || !isFinite(oi) || !question) return;
+        if (oi < 0 || oi >= question.options.length) return;
+        clean[qi] = oi;
+      });
+      if (Object.keys(clean).length) s.quiz[lessonId] = clean;
+      else delete s.quiz[lessonId];
+    });
+    s.quizVersion = 2;
+    return s;
   }
 
   function saveState() {
@@ -88,7 +121,9 @@
     warn: '<path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5M12 17h.01"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
-    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>'
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+    download: '<path d="M12 4v11M8 11l4 4 4-4"/><path d="M5 20h14"/>',
+    upload: '<path d="M12 20V9M8 13l4-4 4 4"/><path d="M5 4h14"/>'
   };
 
   function icon(name, size, cls) {
@@ -511,9 +546,18 @@
           <p>Read the objective. Do the lab. Mark the lesson complete when you can explain the work without following along.</p>
         </div>
         ${modules}
-        <div style="display:flex; justify-content:space-between; gap:20px; align-items:center; margin-top:24px; flex-wrap:wrap;">
-          <a class="text-link" href="#/labs">Browse all ${RHEL.lessonOrder.length} labs ${icon('arrow', 14)}</a>
-          <button class="btn btn-sm btn-ghost" data-reset-progress>${icon('reset', 13)} Reset progress</button>
+        <div class="progress-tools">
+          <div class="progress-tools-copy">
+            <strong>Progress tools</strong>
+            <span>Back up this fieldbook as a JSON file or restore it on another device.</span>
+          </div>
+          <div class="progress-tools-actions">
+            <a class="text-link" href="#/labs">Browse all ${RHEL.lessonOrder.length} labs ${icon('arrow', 14)}</a>
+            <button class="btn btn-sm btn-ghost" data-export-progress>${icon('download', 13)} Export progress</button>
+            <button class="btn btn-sm btn-ghost" data-import-progress>${icon('upload', 13)} Import progress</button>
+            <input type="file" accept="application/json,.json" data-import-file hidden>
+            <button class="btn btn-sm btn-ghost" data-reset-progress>${icon('reset', 13)} Reset progress</button>
+          </div>
         </div>
 
         <div style="margin-top:64px;">
@@ -617,14 +661,15 @@
       var answered = savedQuiz[qi] !== undefined;
       var chosen = savedQuiz[qi];
       var correct = answered && chosen === q.answer;
+      var order = RHEL.quizOrder(id, qi, q);
       return `<div class="quiz-question" data-quiz-question data-q="${qi}" ${answered ? 'data-answered="true"' : ''}>
         <div class="quiz-q"><span class="qnum">0${qi + 1}</span><span>${esc(q.q)}</span></div>
         <div class="quiz-options">
-          ${q.options.map(function (opt, oi) {
+          ${order.map(function (oi, displayIndex) {
             var cls = 'quiz-option';
             if (answered && oi === q.answer) cls += ' is-correct';
             if (answered && oi === chosen && oi !== q.answer) cls += ' is-wrong';
-            return `<button class="${cls}" data-quiz-option data-lesson="${id}" data-q="${qi}" data-option="${oi}" ${answered ? 'disabled' : ''}><span class="opt-letter">${String.fromCharCode(65 + oi)}</span><span>${esc(opt)}</span></button>`;
+            return `<button class="${cls}" data-quiz-option data-lesson="${id}" data-q="${qi}" data-option="${oi}" ${answered ? 'disabled' : ''}><span class="opt-letter">${String.fromCharCode(65 + displayIndex)}</span><span>${esc(q.options[oi])}</span></button>`;
           }).join('')}
         </div>
         <div class="quiz-feedback ${answered ? 'is-visible' : ''} ${answered && !correct ? 'is-wrong' : ''}" data-quiz-feedback>${answered ? esc((correct ? 'Correct. ' : 'Not quite. ') + q.why) : ''}</div>
@@ -1361,6 +1406,194 @@
   }
 
   /* ------------------------------------------------------------------------
+     Progress export / import
+     ------------------------------------------------------------------------ */
+
+  function progressSnapshot() {
+    return {
+      completedLessons: state.completedLessons.slice(),
+      objectives: JSON.parse(JSON.stringify(state.objectives || {})),
+      labSteps: JSON.parse(JSON.stringify(state.labSteps || {})),
+      quiz: JSON.parse(JSON.stringify(state.quiz || {})),
+      labsDone: state.labsDone.slice(),
+      lastLesson: state.lastLesson || null,
+      lastVisit: state.lastVisit || null
+    };
+  }
+
+  function exportProgress() {
+    var payload = {
+      app: 'RHEL Fieldbook',
+      schema: 2,
+      quizVersion: 2,
+      exportedAt: new Date().toISOString(),
+      progress: progressSnapshot()
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'rhel-fieldbook-progress-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    showToast('<strong>Progress exported.</strong> Keep the JSON file as your backup.');
+  }
+
+  function isPlainObject(value) {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  function normalizeImportedProgress(parsed) {
+    if (!isPlainObject(parsed)) throw new Error('The file must contain a JSON object.');
+    var progress = parsed;
+    if (parsed.app !== undefined) {
+      if (parsed.app !== 'RHEL Fieldbook') throw new Error('This is not a RHEL Fieldbook progress file.');
+      if (parsed.schema !== undefined && parsed.schema !== 1 && parsed.schema !== 2) {
+        throw new Error('Unsupported progress file version.');
+      }
+      progress = parsed.progress;
+    }
+    if (!isPlainObject(progress)) throw new Error('The progress payload is missing.');
+
+    var recognized = ['completedLessons', 'objectives', 'labSteps', 'quiz', 'labsDone', 'lastLesson', 'lastVisit'];
+    var hasProgress = recognized.some(function (key) { return progress[key] !== undefined; });
+    if (!hasProgress) throw new Error('No progress fields were found in this file.');
+
+    var out = {
+      completedLessons: [],
+      objectives: {},
+      labSteps: {},
+      quiz: {},
+      labsDone: [],
+      lastLesson: null,
+      lastVisit: null
+    };
+
+    function lessonFor(id, label) {
+      if (typeof id !== 'string' || !RHEL.lessons[id]) {
+        throw new Error('Unknown lesson id in ' + label + ': ' + String(id) + '.');
+      }
+      return RHEL.lessons[id];
+    }
+
+    function stringList(value, label) {
+      if (value === undefined) return [];
+      if (!Array.isArray(value)) throw new Error(label + ' must be an array.');
+      var seen = {};
+      var list = [];
+      value.forEach(function (id) {
+        lessonFor(id, label);
+        if (!seen[id]) { seen[id] = true; list.push(id); }
+      });
+      return list;
+    }
+
+    out.completedLessons = stringList(progress.completedLessons, 'completedLessons');
+    out.labsDone = stringList(progress.labsDone, 'labsDone');
+
+    if (progress.objectives !== undefined) {
+      if (!isPlainObject(progress.objectives)) throw new Error('objectives must be an object.');
+      Object.keys(progress.objectives).forEach(function (id) {
+        var lesson = lessonFor(id, 'objectives');
+        var values = progress.objectives[id];
+        if (!Array.isArray(values)) throw new Error('Objectives for ' + id + ' must be an array.');
+        var clean = [];
+        values.forEach(function (value) {
+          var n = parseInt(value, 10);
+          if (!isFinite(n) || n < 0 || n >= lesson.objectives.length) {
+            throw new Error('Objective index out of range for ' + id + ': ' + String(value) + '.');
+          }
+          if (clean.indexOf(n) === -1) clean.push(n);
+        });
+        clean.sort(function (a, b) { return a - b; });
+        if (clean.length) out.objectives[id] = clean;
+      });
+    }
+
+    if (progress.labSteps !== undefined) {
+      if (!isPlainObject(progress.labSteps)) throw new Error('labSteps must be an object.');
+      Object.keys(progress.labSteps).forEach(function (id) {
+        var lesson = lessonFor(id, 'labSteps');
+        var values = progress.labSteps[id];
+        if (!Array.isArray(values)) throw new Error('Lab steps for ' + id + ' must be an array.');
+        if (values.length > lesson.lab.steps.length) throw new Error('Too many lab steps for ' + id + '.');
+        var clean = [];
+        values.forEach(function (value) {
+          if (value === null || value === undefined) {
+            clean.push(false);
+            return;
+          }
+          if (value !== true && value !== false && value !== 0 && value !== 1) {
+            throw new Error('Lab step values for ' + id + ' must be true or false.');
+          }
+          clean.push(!!value);
+        });
+        if (clean.some(Boolean)) out.labSteps[id] = clean;
+      });
+    }
+
+    if (progress.quiz !== undefined) {
+      if (!isPlainObject(progress.quiz)) throw new Error('quiz must be an object.');
+      Object.keys(progress.quiz).forEach(function (id) {
+        var lesson = lessonFor(id, 'quiz');
+        var answers = progress.quiz[id];
+        if (!isPlainObject(answers)) throw new Error('Quiz answers for ' + id + ' must be an object.');
+        var clean = {};
+        Object.keys(answers).forEach(function (key) {
+          var qi = parseInt(key, 10);
+          var oi = parseInt(answers[key], 10);
+          var question = lesson.quiz[qi];
+          if (!isFinite(qi) || !question) throw new Error('Quiz question out of range for ' + id + ': ' + key + '.');
+          if (!isFinite(oi) || oi < 0 || oi >= question.options.length) {
+            throw new Error('Quiz answer out of range for ' + id + ' question ' + (qi + 1) + '.');
+          }
+          clean[qi] = oi;
+        });
+        if (Object.keys(clean).length) out.quiz[id] = clean;
+      });
+    }
+
+    if (progress.lastLesson !== undefined && progress.lastLesson !== null) {
+      lessonFor(progress.lastLesson, 'lastLesson');
+      out.lastLesson = progress.lastLesson;
+    }
+    if (progress.lastVisit !== undefined && progress.lastVisit !== null) {
+      if (typeof progress.lastVisit !== 'string') throw new Error('lastVisit must be a string.');
+      out.lastVisit = progress.lastVisit;
+    }
+    return out;
+  }
+
+  function importProgressFile(file) {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('<strong>Import failed.</strong> The progress file is too large.');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var parsed = JSON.parse(String(reader.result || ''));
+        var imported = normalizeImportedProgress(parsed);
+        if (!window.confirm('Replace your current progress with this import? This cannot be undone.')) return;
+        state = Object.assign({}, state, imported, { quizVersion: 2 });
+        saveState();
+        commandCache = null;
+        renderRoute();
+        showToast('<strong>Progress imported.</strong> ' + imported.completedLessons.length + ' lessons and ' + imported.labsDone.length + ' labs restored.');
+      } catch (err) {
+        showToast('<strong>Import failed.</strong> ' + esc(err.message || 'Invalid progress file.'));
+      }
+    };
+    reader.onerror = function () {
+      showToast('<strong>Import failed.</strong> The file could not be read.');
+    };
+    reader.readAsText(file);
+  }
+
+  /* ------------------------------------------------------------------------
      Reset
      ------------------------------------------------------------------------ */
 
@@ -1641,6 +1874,19 @@
         if (target) target.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
         return;
       }
+      var exportBtn = e.target.closest('[data-export-progress]');
+      if (exportBtn) {
+        e.preventDefault();
+        exportProgress();
+        return;
+      }
+      var importBtn = e.target.closest('[data-import-progress]');
+      if (importBtn) {
+        e.preventDefault();
+        var fileInput = document.querySelector('[data-import-file]');
+        if (fileInput) fileInput.click();
+        return;
+      }
       var reset = e.target.closest('[data-reset-progress]');
       if (reset) {
         e.preventDefault();
@@ -1654,6 +1900,11 @@
     document.addEventListener('change', function (e) {
       if (e.target.matches('[data-objective]')) handleObjective(e.target);
       if (e.target.matches('[data-lab-step]')) handleLabStep(e.target);
+      if (e.target.matches('[data-import-file]')) {
+        var file = e.target.files && e.target.files[0];
+        e.target.value = '';
+        importProgressFile(file);
+      }
     });
 
     window.addEventListener('hashchange', function () { renderRoute(); });
