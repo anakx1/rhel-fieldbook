@@ -53,7 +53,10 @@ Each lesson includes objectives, a reading section, a command deck, a hands-on l
 - Command palette (`Ctrl`/`Cmd` + `K`) with keyboard navigation.
 - Searchable and filterable command index and lab library.
 - Export and import progress as a validated JSON file from the Curriculum page.
-- Simulated read-only RHEL terminal sandbox with a virtual filesystem and `help`.
+- Stateful simulated RHEL sandbox with a real shell parser, writable virtual filesystem, permissions, users, packages, services, mounts, SELinux state, and `help`.
+- Lab steps can auto-pass from sandbox evidence, with a manual override for work done in a real VM.
+- Sandbox state and snapshots persist in `localStorage`; use Reset, Snapshot, and Restore from the terminal panel.
+- Tab completion for command names and filesystem paths.
 - Deterministic quiz option shuffling so answer positions stay balanced.
 - Light and dark themes with persistence.
 - Responsive layout for desktop, tablet, and phone.
@@ -70,6 +73,9 @@ rhel-fieldbook/
 ├── serve.sh                    # Tiny local server helper
 ├── scripts/
 │   └── validate-content.js     # Dependency-free content checks
+├── tests/
+│   ├── sandbox-parser.test.js  # Plain Node parser and shell tests
+│   └── sandbox-permissions.test.js
 └── assets/
     ├── css/style.css           # Design system and responsive rules
     ├── favicon.svg
@@ -81,17 +87,28 @@ rhel-fieldbook/
         ├── lessons-systems.js
         ├── lessons-practice.js
         ├── quiz-order.js       # Deterministic, balanced quiz option order
-        ├── sandbox.js          # Simulated terminal and virtual filesystem
+        ├── sandbox/            # Stateful simulated RHEL machine
+        │   ├── vfs.js          # Virtual filesystem and permission checks
+        │   ├── machine.js      # Seed state, users, packages, persistence
+        │   ├── parser.js       # Quotes, pipes, connectors, expansion
+        │   ├── commands.js     # Command registry and file helpers
+        │   ├── commands-*.js   # Text, filesystem, identity, system commands
+        │   ├── shell.js        # Execution, redirects, sudo/su, completion
+        │   └── index.js        # Panel UI, reset/snapshot/restore, public API
         └── app.js              # Routing, rendering, state, filters, palette
 ```
 
-Scripts load in order: data → lesson modules → quiz order → sandbox → app.
+Scripts load in order: data → lesson modules → quiz order → sandbox modules → app.
+
+The sandbox keeps a plain-JSON machine state. `vfs.js` and `machine.js` are pure and Node-loadable, which is how the tests exercise the parser and permission engine without a browser.
 
 ## Editing content
 
 Lesson content lives in the four `lessons-*.js` files. A lesson is a key in `RHEL.lessons` with `title`, `module`, `objectives`, `sections`, `commands`, `lab`, and `quiz`. Add the lesson id to the relevant module and `RHEL.lessonOrder` in `data.js` so navigation, progress, and the command index pick it up.
 
 When changing cached assets, bump `CACHE` in `sw.js` so returning visitors receive the new files.
+
+Lab steps may include an optional `check(sys)` function. It receives the current sandbox machine state and returns a boolean; the UI auto-checks the step when true, while the checkbox remains a manual override for work done in a real VM. Checks should be small, defensive, and based on persistent state or the `sys.evidence` markers set by commands.
 
 ## Validate content
 
@@ -103,11 +120,21 @@ node scripts/validate-content.js
 
 It checks that every lesson id exists and is mapped to a module, quiz answer indices are in range, command cards are unique, every lab step has a verification prompt, and the rendered quiz answer positions stay balanced. The command exits non-zero on failure.
 
+Run the sandbox tests with plain Node (no dependencies):
+
+```bash
+node tests/sandbox-parser.test.js
+node tests/sandbox-permissions.test.js
+```
+
+The parser tests cover quoting, connectors, pipes, redirects, expansion, globs, completion, and `$?`. The permission tests cover root-only files, `sudo`, mode bits, ACLs, directory traversal, setgid inheritance, and the sticky bit.
+
 ## Notes and limits
 
 - Progress is per browser and per device. Clearing site data resets it.
-- The terminal is a simulation. It is intentionally read-only and never touches the real machine. Use a disposable VM for the labs.
+- The terminal is a simulation, but it is stateful. It never touches the real machine; state and snapshots live in `localStorage`. Use Reset for a clean seed and Snapshot/Restore before destructive practice.
 - `sudo` in the sandbox is simulated for practice; it is not a security boundary.
+- Sandbox lab checks are heuristics over the simulated machine. A manual checkbox remains available for work done in a real VM.
 - The syllabus is aligned with RHEL 9 and RHEL 10 concepts, but always verify against the documentation for your exact release.
 
 ## Disclaimer

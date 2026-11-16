@@ -133,6 +133,20 @@
 
   function isComplete(id) { return state.completedLessons.indexOf(id) !== -1; }
   function isLabDone(id) { return state.labsDone.indexOf(id) !== -1; }
+  function sandboxSystem() {
+    return window.RHEL_SANDBOX && typeof window.RHEL_SANDBOX.getSystem === 'function' ? window.RHEL_SANDBOX.getSystem() : null;
+  }
+  function labStepAuto(step) {
+    if (!step || typeof step.check !== 'function') return null;
+    var sys = sandboxSystem();
+    if (!sys) return null;
+    try { return !!step.check(sys); }
+    catch (e) { return false; }
+  }
+  function labStepDone(id, step, index) {
+    if ((state.labSteps[id] || [])[index]) return true;
+    return labStepAuto(step) === true;
+  }
   function coursePercent() {
     return Math.round((state.completedLessons.length / RHEL.lessonOrder.length) * 100);
   }
@@ -324,7 +338,7 @@
               <div class="line"><span class="out">0 loaded units listed.</span></div>
               <div class="line"><span class="prompt">[student@rhel-lab ~]$</span><span class="cmd"><span class="terminal-caret" aria-hidden="true"></span></span></div>
             </div>
-            <div class="terminal-foot"><span>read-only practice shell</span><span>● connected</span></div>
+            <div class="terminal-foot"><span>stateful practice shell</span><span>● connected</span></div>
           </div>
           <div class="hero-progress-card">
             <div class="progress-ring" data-progress-ring style="--p:${pct}"><span>${pct}%</span></div>
@@ -467,7 +481,7 @@
           </details>
           <details class="faq-item">
             <summary>Are the commands safe to run?</summary>
-            <div class="faq-answer"><p>The terminal sandbox is simulated and read-only. Commands shown in lessons are real RHEL commands; some change users, services, storage, or security settings. Run them only in a lab VM you can rebuild, and never paste a destructive command without reading it first.</p></div>
+            <div class="faq-answer"><p>The terminal sandbox is simulated and stateful: it has a virtual filesystem, users, packages, services, mounts, and a permission engine. Changes persist in this browser and can be reset or snapshotted, so it is safe for practice. Commands shown in lessons are real RHEL commands; some change users, services, storage, or security settings. Run those only in a lab VM you can rebuild, and never paste a destructive command without reading it first.</p></div>
           </details>
           <details class="faq-item">
             <summary>What comes after Foundations?</summary>
@@ -622,7 +636,7 @@
     var next = RHEL.getNextLesson(id);
     var objectives = state.objectives[id] || [];
     var labSteps = state.labSteps[id] || [];
-    var labDoneCount = lesson.lab.steps.filter(function (_, i) { return !!labSteps[i]; }).length;
+    var labDoneCount = lesson.lab.steps.filter(function (step, i) { return labStepDone(id, step, i); }).length;
     var labPct = Math.round((labDoneCount / lesson.lab.steps.length) * 100);
     var sections = lesson.sections.map(function (s, i) {
       return { title: s.title, id: 's' + (i + 1), body: s.body };
@@ -645,13 +659,16 @@
     }).join('');
 
     var labMarkup = lesson.lab.steps.map(function (step, i) {
-      var done = !!labSteps[i];
+      var manual = !!labSteps[i];
+      var auto = labStepAuto(step) === true;
+      var done = manual || auto;
       return `<li class="lab-item ${done ? 'is-checked' : ''}">
         <div class="lab-item-check"><input type="checkbox" data-lab-step data-lesson="${id}" data-index="${i}" aria-label="Mark lab step ${i + 1} complete" ${done ? 'checked' : ''}></div>
         <div class="lab-item-body">
           <p>${esc(step.text)}</p>
           ${step.cmd ? '<pre>' + esc(rawCmd(step.cmd)) + '</pre>' : ''}
           ${step.verify ? '<span class="verify">' + esc(step.verify) + '</span>' : ''}
+          ${auto && !manual ? '<span class="verify verify-auto">Automatically detected from your sandbox</span>' : ''}
         </div>
       </li>`;
     }).join('');
@@ -778,12 +795,12 @@
               <p class="rail-title">Lesson state</p>
               <div class="rail-stat"><span>Objectives</span><strong><span data-objective-count="${id}">${objectives.length}</span>/${lesson.objectives.length}</strong></div>
               <div class="rail-progress"><span style="width:${Math.round((objectives.length / lesson.objectives.length) * 100)}%"></span></div>
-              <div class="rail-stat"><span>Lab steps</span><strong>${labDoneCount}/${lesson.lab.steps.length}</strong></div>
+              <div class="rail-stat" data-lab-rail="${id}"><span>Lab steps</span><strong>${labDoneCount}/${lesson.lab.steps.length}</strong></div>
               <div class="rail-progress"><span style="width:${labPct}%"></span></div>
               <div class="rail-stat"><span>Status</span><strong>${isComplete(id) ? 'Complete' : 'In progress'}</strong></div>
             </div>
             <div class="rail-block">
-              <p class="rail-note">Commands here are real. Practice them in a disposable RHEL VM. The sandbox is simulated and read-only.</p>
+              <p class="rail-note">Commands here are real. Practice them in a disposable RHEL VM. The in-browser sandbox is simulated and stateful; reset it from the terminal panel when you want a clean machine.</p>
             </div>
           </aside>
         </div>
@@ -1280,15 +1297,48 @@
 
   function updateLabProgress(id) {
     var lesson = RHEL.getLesson(id);
-    var steps = state.labSteps[id] || [];
-    var count = steps.filter(Boolean).length;
+    var count = lesson.lab.steps.filter(function (step, i) { return labStepDone(id, step, i); }).length;
     var pct = Math.round((count / lesson.lab.steps.length) * 100);
     document.querySelectorAll('[data-lab-progress="' + id + '"]').forEach(function (el) {
       el.innerHTML = '<span>' + count + '</span> / ' + lesson.lab.steps.length + ' steps · ' + pct + '%';
     });
     var bars = document.querySelectorAll('.rail-card .rail-progress span');
     if (bars && bars.length > 1) bars[1].style.width = pct + '%';
+    document.querySelectorAll('[data-lab-rail="' + id + '"] strong').forEach(function (el) {
+      el.textContent = count + '/' + lesson.lab.steps.length;
+    });
     return { count: count, total: lesson.lab.steps.length, pct: pct };
+  }
+
+  function refreshLabChecks() {
+    var ids = {};
+    document.querySelectorAll('[data-lab-step]').forEach(function (input) {
+      var id = input.getAttribute('data-lesson');
+      var index = parseInt(input.getAttribute('data-index'), 10);
+      var lesson = RHEL.getLesson(id);
+      if (!lesson || !lesson.lab.steps[index]) return;
+      var step = lesson.lab.steps[index];
+      var manual = !!(state.labSteps[id] || [])[index];
+      var auto = labStepAuto(step) === true;
+      var done = manual || auto;
+      input.checked = done;
+      var item = input.closest('.lab-item');
+      if (item) {
+        item.classList.toggle('is-checked', done);
+        var existing = item.querySelector('.verify-auto');
+        if (auto && !manual && !existing) {
+          var badge = document.createElement('span');
+          badge.className = 'verify verify-auto';
+          badge.textContent = 'Automatically detected from your sandbox';
+          var body = item.querySelector('.lab-item-body');
+          if (body) body.appendChild(badge);
+        } else if ((!auto || manual) && existing) {
+          existing.remove();
+        }
+      }
+      ids[id] = true;
+    });
+    Object.keys(ids).forEach(function (id) { updateLabProgress(id); });
   }
 
   function handleLabStep(input) {
@@ -1297,8 +1347,13 @@
     var arr = (state.labSteps[id] || []).slice();
     arr[index] = input.checked;
     state.labSteps[id] = arr;
+    var lesson = RHEL.getLesson(id);
+    var step = lesson && lesson.lab.steps[index];
+    var auto = step ? labStepAuto(step) === true : false;
+    var done = input.checked || auto;
+    input.checked = done;
     var item = input.closest('.lab-item');
-    if (item) item.classList.toggle('is-checked', input.checked);
+    if (item) item.classList.toggle('is-checked', done);
     saveState();
     var progress = updateLabProgress(id);
     if (progress.count === progress.total && progress.total > 0) {
@@ -1908,6 +1963,7 @@
     });
 
     window.addEventListener('hashchange', function () { renderRoute(); });
+    document.addEventListener('rhel:sandbox-change', function () { refreshLabChecks(); });
   }
 
   /* ------------------------------------------------------------------------

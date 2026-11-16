@@ -124,8 +124,13 @@
     <header class="sandbox-head">
       <div class="sandbox-dots" aria-hidden="true"><span></span><span></span><span></span></div>
       <div class="sandbox-title">
-        <strong>student@rhel-lab</strong>
-        <span>simulated shell · read-only</span>
+        <strong id="sandbox-title-user">student@rhel-lab</strong>
+        <span id="sandbox-subtitle">stateful simulated shell · saved locally</span>
+      </div>
+      <div class="sandbox-actions">
+        <button type="button" class="sandbox-action" id="sandbox-reset" title="Reset the simulated machine to its original seed">Reset</button>
+        <button type="button" class="sandbox-action" id="sandbox-snapshot" title="Save the current machine state as a snapshot">Snapshot</button>
+        <button type="button" class="sandbox-action" id="sandbox-restore" title="Restore the saved snapshot">Restore</button>
       </div>
       <button class="sandbox-close" id="sandbox-close" aria-label="Close terminal sandbox">×</button>
     </header>
@@ -136,7 +141,7 @@
       <input id="sandbox-input" class="sandbox-input" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="try: help" aria-describedby="sandbox-hint">
       <button type="submit" class="sandbox-run">Run</button>
     </form>
-    <div class="sandbox-foot" id="sandbox-hint">A safe practice shell. Nothing here touches your real machine.</div>
+    <div class="sandbox-foot" id="sandbox-hint">A safe practice shell. State persists in this browser; reset or snapshot before destructive practice.</div>
   </aside>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -147,7 +152,16 @@
   <script src="assets/js/lessons-systems.js"></script>
   <script src="assets/js/lessons-practice.js"></script>
   <script src="assets/js/quiz-order.js"></script>
-  <script src="assets/js/sandbox.js"></script>
+  <script src="assets/js/sandbox/vfs.js"></script>
+  <script src="assets/js/sandbox/machine.js"></script>
+  <script src="assets/js/sandbox/parser.js"></script>
+  <script src="assets/js/sandbox/commands.js"></script>
+  <script src="assets/js/sandbox/commands-text.js"></script>
+  <script src="assets/js/sandbox/commands-fs.js"></script>
+  <script src="assets/js/sandbox/commands-identity.js"></script>
+  <script src="assets/js/sandbox/commands-system.js"></script>
+  <script src="assets/js/sandbox/shell.js"></script>
+  <script src="assets/js/sandbox/index.js"></script>
   <script src="assets/js/app.js"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
