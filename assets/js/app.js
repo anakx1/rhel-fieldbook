@@ -14,6 +14,8 @@
   var activeNav = 'home';
   var currentRoute = { name: 'home' };
   var commandCache = null;
+  var reviewCardCache = null;
+  var reviewRevealed = false;
 
   var DEFAULT_STATE = {
     version: 1,
@@ -22,11 +24,19 @@
     objectives: {},
     labSteps: {},
     quiz: {},
-    quizVersion: 2,
+    quizVersion: 3,
     labsDone: [],
     lastLesson: null,
-    lastVisit: null
+    lastVisit: null,
+    scenarioRuns: {},
+    scenarioActive: null,
+    review: { version: 1, items: {}, active: null, lastSession: null, history: [] },
+    exam: { active: null, lastResult: null, history: [], learnerName: '' }
   };
+
+  function freshState() {
+    return JSON.parse(JSON.stringify(DEFAULT_STATE));
+  }
 
   var state = loadState();
 
@@ -38,9 +48,9 @@
     var loaded;
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      loaded = raw ? Object.assign({}, DEFAULT_STATE, JSON.parse(raw)) : Object.assign({}, DEFAULT_STATE);
+      loaded = raw ? Object.assign(freshState(), JSON.parse(raw)) : freshState();
     } catch (e) {
-      loaded = Object.assign({}, DEFAULT_STATE);
+      loaded = freshState();
     }
     var migrated = migrateState(loaded);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated)); } catch (e) {}
@@ -52,7 +62,7 @@
      are preserved and anything malformed is dropped instead of breaking the
      lesson renderer. */
   function migrateState(input) {
-    var s = Object.assign({}, DEFAULT_STATE, input || {});
+    var s = Object.assign(freshState(), input || {});
     if (!s.quiz || typeof s.quiz !== 'object' || Array.isArray(s.quiz)) s.quiz = {};
     Object.keys(s.quiz).forEach(function (lessonId) {
       var lesson = RHEL.lessons[lessonId];
@@ -73,8 +83,198 @@
       if (Object.keys(clean).length) s.quiz[lessonId] = clean;
       else delete s.quiz[lessonId];
     });
-    s.quizVersion = 2;
+    s.quizVersion = 3;
+    s.scenarioRuns = isPlainObject(s.scenarioRuns) ? s.scenarioRuns : {};
+    Object.keys(s.scenarioRuns).forEach(function (id) {
+      var run = RHEL.scenarios.find(id) ? normalizeScenarioRun(s.scenarioRuns[id]) : null;
+      if (run) s.scenarioRuns[id] = run;
+      else delete s.scenarioRuns[id];
+    });
+    if (s.scenarioActive) {
+      var activeScenario = RHEL.scenarios.find(s.scenarioActive.id);
+      if (!activeScenario || !isFinite(Number(s.scenarioActive.startedAt))) s.scenarioActive = null;
+      else {
+        s.scenarioActive.startedAt = Number(s.scenarioActive.startedAt);
+        s.scenarioActive.hints = Math.max(0, Math.min(3, parseInt(s.scenarioActive.hints, 10) || 0));
+      }
+    }
+    s.review = normalizeReviewState(s.review);
+    s.exam = normalizeExamState(s.exam);
     return s;
+  }
+
+  function clampNumber(value, min, max, fallback) {
+    var number = Number(value);
+    if (!isFinite(number)) number = fallback;
+    return Math.max(min, Math.min(max, number));
+  }
+
+  function safeTimestamp(value) {
+    return typeof value === 'string' && !isNaN(Date.parse(value)) ? value : new Date(0).toISOString();
+  }
+
+  function normalizeScenarioRun(value) {
+    if (!isPlainObject(value)) return null;
+    return {
+      attempts: Math.max(1, parseInt(value.attempts, 10) || 1),
+      bestScore: clampNumber(value.bestScore, 0, 100, 0),
+      bestSeconds: clampNumber(value.bestSeconds, 0, 365 * 24 * 60 * 60, 0),
+      lastScore: clampNumber(value.lastScore, 0, 100, 0),
+      lastSeconds: clampNumber(value.lastSeconds, 0, 365 * 24 * 60 * 60, 0),
+      lastHints: clampNumber(value.lastHints, 0, 3, 0),
+      lastCompletedAt: safeTimestamp(value.lastCompletedAt)
+    };
+  }
+
+  function normalizeReviewSession(value) {
+    if (!isPlainObject(value)) return null;
+    return {
+      completedAt: safeTimestamp(value.completedAt),
+      reviewed: Math.max(0, parseInt(value.reviewed, 10) || 0),
+      correct: Math.max(0, parseInt(value.correct, 10) || 0),
+      again: Math.max(0, parseInt(value.again, 10) || 0),
+      filter: value.filter === 'quiz' || value.filter === 'commands' ? value.filter : 'all',
+      durationSeconds: Math.max(0, parseInt(value.durationSeconds, 10) || 0)
+    };
+  }
+
+  function normalizeExamResult(value) {
+    if (!isPlainObject(value)) return null;
+    var questionIds = Array.isArray(value.questionIds)
+      ? value.questionIds.filter(function (id) { return !!RHEL.exam.question(id); })
+      : [];
+    var total = questionIds.length || Math.max(0, Math.min(100, parseInt(value.total, 10) || 0));
+    var correct = clampNumber(value.correct, 0, total || 100, 0);
+    var practicalPassed = value.practicalPassed === true;
+    var score = clampNumber(value.score, 0, 100, total ? Math.round(((correct + (practicalPassed ? 1 : 0)) / (total + 1)) * 100) : 0);
+    var answers = {};
+    if (isPlainObject(value.answers)) {
+      Object.keys(value.answers).forEach(function (id) {
+        var item = RHEL.exam.question(id);
+        var choice = parseInt(value.answers[id], 10);
+        if (item && isFinite(choice) && choice >= 0 && choice < item.question.options.length) answers[id] = choice;
+      });
+    }
+    var moduleStats = {};
+    RHEL.modules.forEach(function (module) {
+      var source = isPlainObject(value.moduleStats) && isPlainObject(value.moduleStats[module.id]) ? value.moduleStats[module.id] : {};
+      var moduleTotal = Math.max(0, parseInt(source.total, 10) || 0);
+      moduleStats[module.id] = {
+        id: module.id,
+        number: module.number,
+        title: module.title,
+        correct: clampNumber(source.correct, 0, moduleTotal, 0),
+        total: moduleTotal
+      };
+    });
+    var questionResults = Array.isArray(value.questionResults) ? value.questionResults.filter(function (item) {
+      return isPlainObject(item) && !!RHEL.exam.question(item.id);
+    }).map(function (item) {
+      var source = RHEL.exam.question(item.id);
+      return { id: item.id, lesson: source.lesson, module: source.module, qi: source.qi, chosen: item.chosen === null || item.chosen === undefined ? null : parseInt(item.chosen, 10), correct: item.correct === true };
+    }) : [];
+    return {
+      id: typeof value.id === 'string' ? value.id.slice(0, 80) : 'exam-imported',
+      completedAt: safeTimestamp(value.completedAt),
+      startedAt: Number(value.startedAt) || 0,
+      durationSeconds: clampNumber(value.durationSeconds, 0, 24 * 60 * 60, 0),
+      score: score,
+      correct: correct,
+      total: total,
+      practicalPassed: practicalPassed,
+      pass: score >= RHEL.exam.config.passScore && practicalPassed,
+      moduleStats: moduleStats,
+      questionResults: questionResults,
+      questionIds: questionIds,
+      answers: answers
+    };
+  }
+
+  function normalizeExamHistoryItem(value) {
+    if (!isPlainObject(value)) return null;
+    var practicalPassed = value.practicalPassed === true;
+    var score = clampNumber(value.score, 0, 100, 0);
+    return {
+      id: typeof value.id === 'string' ? value.id.slice(0, 80) : 'exam-imported',
+      completedAt: safeTimestamp(value.completedAt),
+      score: score,
+      correct: clampNumber(value.correct, 0, 100, 0),
+      total: clampNumber(value.total, 0, 100, 0),
+      practicalPassed: practicalPassed,
+      pass: score >= RHEL.exam.config.passScore && practicalPassed,
+      durationSeconds: clampNumber(value.durationSeconds, 0, 24 * 60 * 60, 0)
+    };
+  }
+
+  function normalizeReviewState(value) {
+    var review = { version: 1, items: {}, active: null, lastSession: null, history: [] };
+    if (!isPlainObject(value)) return review;
+    var cardMap = {};
+    getReviewCards().forEach(function (card) { cardMap[card.id] = card; });
+    if (isPlainObject(value.items)) {
+      Object.keys(value.items).forEach(function (id) {
+        var item = value.items[id];
+        if (!cardMap[id] || !isPlainObject(item)) return;
+        var box = parseInt(item.box, 10);
+        if (!isFinite(box)) box = 1;
+        review.items[id] = {
+          box: Math.max(1, Math.min(5, box)),
+          due: Number(item.due) || 0,
+          seen: Math.max(0, parseInt(item.seen, 10) || 0),
+          correct: Math.max(0, parseInt(item.correct, 10) || 0),
+          wrong: Math.max(0, parseInt(item.wrong, 10) || 0),
+          last: item.last ? Number(item.last) : null
+        };
+      });
+    }
+    if (isPlainObject(value.active) && Array.isArray(value.active.queue)) {
+      var queue = value.active.queue.filter(function (id) { return !!cardMap[id]; });
+      if (queue.length) {
+        review.active = {
+          queue: queue,
+          index: Math.max(0, Math.min(queue.length, parseInt(value.active.index, 10) || 0)),
+          filter: value.active.filter === 'quiz' || value.active.filter === 'commands' ? value.active.filter : 'all',
+          startedAt: Number(value.active.startedAt) || Date.now(),
+          correct: Math.max(0, parseInt(value.active.correct, 10) || 0),
+          again: Math.max(0, parseInt(value.active.again, 10) || 0)
+        };
+      }
+    }
+    if (isPlainObject(value.lastSession)) review.lastSession = normalizeReviewSession(value.lastSession);
+    if (Array.isArray(value.history)) {
+      review.history = value.history.map(normalizeReviewSession).filter(Boolean).slice(-20);
+    }
+    return review;
+  }
+
+  function normalizeExamState(value) {
+    var exam = { active: null, lastResult: null, history: [], learnerName: '' };
+    if (!isPlainObject(value)) return exam;
+    if (typeof value.learnerName === 'string') exam.learnerName = value.learnerName.slice(0, 80);
+    if (isPlainObject(value.active) && Array.isArray(value.active.questionIds) && value.active.questionIds.length) {
+      var validIds = value.active.questionIds.filter(function (id) { return !!RHEL.exam.question(id); });
+      if (validIds.length === value.active.questionIds.length) {
+        var answers = {};
+        if (isPlainObject(value.active.answers)) {
+          Object.keys(value.active.answers).forEach(function (id) {
+            var item = RHEL.exam.question(id);
+            var choice = parseInt(value.active.answers[id], 10);
+            if (item && isFinite(choice) && choice >= 0 && choice < item.question.options.length) answers[id] = choice;
+          });
+        }
+        exam.active = {
+          id: typeof value.active.id === 'string' ? value.active.id : 'exam-' + Date.now(),
+          questionIds: validIds,
+          answers: answers,
+          index: Math.max(0, Math.min(validIds.length, parseInt(value.active.index, 10) || 0)),
+          startedAt: Number(value.active.startedAt) || Date.now(),
+          endsAt: Number(value.active.endsAt) || (Date.now() + RHEL.exam.config.minutes * 60000)
+        };
+      }
+    }
+    if (isPlainObject(value.lastResult)) exam.lastResult = normalizeExamResult(value.lastResult);
+    if (Array.isArray(value.history)) exam.history = value.history.map(normalizeExamHistoryItem).filter(Boolean).slice(-10);
+    return exam;
   }
 
   function saveState() {
@@ -143,6 +343,12 @@
     try { return !!step.check(sys); }
     catch (e) { return false; }
   }
+  function scenarioGoalMet(scenario) {
+    var sys = sandboxSystem();
+    if (!scenario || !sys) return false;
+    try { return !!scenario.goal(sys); }
+    catch (e) { return false; }
+  }
   function labStepDone(id, step, index) {
     if ((state.labSteps[id] || [])[index]) return true;
     return labStepAuto(step) === true;
@@ -179,6 +385,135 @@
     });
     commandCache = list;
     return list;
+  }
+
+  function getReviewCards() {
+    if (!reviewCardCache) reviewCardCache = RHEL.review.buildCards(getCommands());
+    return reviewCardCache;
+  }
+
+  function reviewDueCount(now) {
+    return RHEL.review.dueCount(getReviewCards(), state.review.items || {}, now || Date.now());
+  }
+
+  function reviewCardById(id) {
+    return getReviewCards().filter(function (card) { return card.id === id; })[0] || null;
+  }
+
+  function shuffleList(list) {
+    var copy = list.slice();
+    for (var i = copy.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var value = copy[i];
+      copy[i] = copy[j];
+      copy[j] = value;
+    }
+    return copy;
+  }
+
+  function reviewStats(now) {
+    var cards = getReviewCards();
+    var items = state.review.items || {};
+    var due = 0;
+    var fresh = 0;
+    var learning = 0;
+    var mature = 0;
+    var quizDue = 0;
+    var commandDue = 0;
+    cards.forEach(function (card) {
+      var item = items[card.id];
+      if (!item) fresh += 1;
+      else if (item.box >= 4) mature += 1;
+      else learning += 1;
+      if (RHEL.review.isDueToday(item, now || Date.now())) {
+        due += 1;
+        if (card.kind === 'quiz') quizDue += 1;
+        else commandDue += 1;
+      }
+    });
+    return { total: cards.length, due: due, fresh: fresh, learning: learning, mature: mature, quizDue: quizDue, commandDue: commandDue };
+  }
+
+  function updateReviewUI() {
+    var due = reviewDueCount();
+    document.querySelectorAll('[data-review-due]').forEach(function (el) {
+      el.textContent = due;
+      el.setAttribute('aria-label', due + ' review cards due today');
+    });
+    document.querySelectorAll('[data-review-due-label]').forEach(function (el) {
+      el.textContent = due === 1 ? '1 card due today' : due + ' cards due today';
+    });
+  }
+
+  function scenarioRun(id) {
+    return state.scenarioRuns && state.scenarioRuns[id] ? state.scenarioRuns[id] : null;
+  }
+
+  function activeScenario() {
+    if (!state.scenarioActive) return null;
+    return RHEL.scenarios.find(state.scenarioActive.id);
+  }
+
+  function formatDuration(totalSeconds) {
+    var seconds = Math.max(0, Math.round(totalSeconds || 0));
+    var minutes = Math.floor(seconds / 60);
+    var rest = seconds % 60;
+    return minutes + ':' + String(rest).padStart(2, '0');
+  }
+
+  function formatClock(totalSeconds) {
+    var seconds = Math.max(0, Math.ceil(totalSeconds || 0));
+    var minutes = Math.floor(seconds / 60);
+    var rest = seconds % 60;
+    return String(minutes).padStart(2, '0') + ':' + String(rest).padStart(2, '0');
+  }
+
+  function examRemaining() {
+    var active = state.exam.active;
+    if (!active) return 0;
+    return Math.max(0, Math.ceil((active.endsAt - Date.now()) / 1000));
+  }
+
+  function examAnsweredCount() {
+    var active = state.exam.active;
+    if (!active) return 0;
+    return active.questionIds.filter(function (id) { return active.answers[id] !== undefined; }).length;
+  }
+
+  function examPracticalPassed() {
+    var sys = sandboxSystem();
+    if (!sys) return false;
+    try { return !!RHEL.exam.practical.check(sys); }
+    catch (e) { return false; }
+  }
+
+  function scenarioElapsed() {
+    if (!state.scenarioActive) return 0;
+    return Math.max(0, Math.round((Date.now() - state.scenarioActive.startedAt) / 1000));
+  }
+
+  function objectiveScore(lesson, index) {
+    var questionIndex = index % lesson.quiz.length;
+    var answer = (state.quiz[lesson.id] || {})[questionIndex];
+    var quizCorrect = answer === lesson.quiz[questionIndex].answer;
+    var stepIndex = index % lesson.lab.steps.length;
+    var step = lesson.lab.steps[stepIndex];
+    var labDone = labStepDone(lesson.id, step, stepIndex);
+    var manual = (state.objectives[lesson.id] || []).indexOf(index) !== -1;
+    var score = (quizCorrect ? 45 : 0) + (labDone ? 45 : 0) + (manual ? 10 : 0);
+    var status = score >= 90 ? 'Mastered' : score >= 45 ? 'Practicing' : score > 0 ? 'Started' : 'Not started';
+    return {
+      questionIndex: questionIndex,
+      question: lesson.quiz[questionIndex],
+      answer: answer,
+      quizCorrect: quizCorrect,
+      stepIndex: stepIndex,
+      step: step,
+      labDone: labDone,
+      manual: manual,
+      score: score,
+      status: status
+    };
   }
 
   function getContinueLesson() {
@@ -225,6 +560,7 @@
     document.querySelectorAll('[data-completed-count]').forEach(function (el) { el.textContent = state.completedLessons.length; });
     document.querySelectorAll('[data-labs-count]').forEach(function (el) { el.textContent = state.labsDone.length; });
     document.querySelectorAll('[data-lesson-count-total]').forEach(function (el) { el.textContent = RHEL.lessonOrder.length; });
+    updateReviewUI();
   }
 
   function showToast(html, duration) {
@@ -248,6 +584,9 @@
     var started = state.completedLessons.length > 0 || !!state.lastLesson;
     var modules = RHEL.modules;
     var commandCount = totalCommands();
+    var review = reviewStats();
+    var incidentsDone = RHEL.scenarios.filter(function (scenario) { return !!scenarioRun(scenario.id); }).length;
+    var lastExam = state.exam.lastResult;
 
     var levelRail = RHEL.levels.map(function (level, i) {
       var live = level.status === 'live';
@@ -384,7 +723,40 @@
         <div class="module-grid">${moduleCards}</div>
       </section>
 
-      <section class="section shell">
+      <section class="section practice-band shell">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Practice beyond the reading</p>
+            <h2>Break it, recall it, <em>prove it.</em></h2>
+          </div>
+          <p>Three ways to turn recognition into working memory: live incidents, spaced review, and a timed final exam with a practical task.</p>
+        </div>
+        <div class="practice-grid">
+          <a class="practice-card" href="#/scenarios">
+            <span class="practice-card-icon">${icon('warn', 19)}</span>
+            <span class="practice-card-kicker">Broken Systems</span>
+            <h3>Five 2 a.m. pages.</h3>
+            <p>Diagnose SELinux, full disks, fstab, SSH key modes, and a missing firewall port in the stateful sandbox.</p>
+            <span class="practice-card-meta">${incidentsDone}/${RHEL.scenarios.length} resolved ${icon('arrow', 12)}</span>
+          </a>
+          <a class="practice-card" href="#/review">
+            <span class="practice-card-icon">${icon('target', 19)}</span>
+            <span class="practice-card-kicker">Spaced review</span>
+            <h3><span data-review-due>${review.due}</span> cards due today.</h3>
+            <p>Quiz questions plus command flashcards in both directions. Five Leitner boxes keep the schedule honest.</p>
+            <span class="practice-card-meta">${review.total} cards · ${review.mature} mature ${icon('arrow', 12)}</span>
+          </a>
+          <a class="practice-card" href="#/exam">
+            <span class="practice-card-icon">${icon('shield', 19)}</span>
+            <span class="practice-card-kicker">Final exam</span>
+            <h3>30 questions. One machine.</h3>
+            <p>A module-balanced timed exam plus a practical sandbox task, a skills breakdown, and a printable certificate.</p>
+            <span class="practice-card-meta">${lastExam ? 'Last score ' + lastExam.score + '%' : '35 minutes'} ${icon('arrow', 12)}</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="section section-border shell">
         <div class="lab-feature">
           <div class="lab-feature-copy">
             <p class="eyebrow">A lesson is not a lecture</p>
@@ -567,6 +939,8 @@
           </div>
           <div class="progress-tools-actions">
             <a class="text-link" href="#/labs">Browse all ${RHEL.lessonOrder.length} labs ${icon('arrow', 14)}</a>
+            <a class="text-link" href="#/mastery">Objective mastery ${icon('arrow', 14)}</a>
+            <a class="text-link" href="#/review">Review · <span data-review-due>${reviewDueCount()}</span> due ${icon('arrow', 14)}</a>
             <button class="btn btn-sm btn-ghost" data-export-progress>${icon('download', 13)} Export progress</button>
             <button class="btn btn-sm btn-ghost" data-import-progress>${icon('upload', 13)} Import progress</button>
             <input type="file" accept="application/json,.json" data-import-file hidden>
@@ -1023,6 +1397,652 @@
     </div>`;
   }
 
+  /* ------------------------------------------------------------------------
+     Broken Systems scenarios
+     ------------------------------------------------------------------------ */
+
+  function viewScenarios(id) {
+    if (id) {
+      var scenario = RHEL.scenarios.find(id);
+      if (!scenario) return viewNotFound();
+      return viewScenarioDetail(scenario);
+    }
+
+    var completed = RHEL.scenarios.filter(function (scenario) { return !!scenarioRun(scenario.id); }).length;
+    var scores = RHEL.scenarios.map(function (scenario) {
+      var run = scenarioRun(scenario.id);
+      return run ? run.bestScore : null;
+    }).filter(function (score) { return score !== null; });
+    var average = scores.length ? Math.round(scores.reduce(function (sum, score) { return sum + score; }, 0) / scores.length) : 0;
+
+    var cards = RHEL.scenarios.map(function (scenario, index) {
+      var run = scenarioRun(scenario.id);
+      var lesson = RHEL.getLesson(scenario.lesson);
+      return `<article class="scenario-card ${run ? 'is-done' : ''}">
+        <div class="scenario-card-top">
+          <span class="scenario-num">CASE ${String(index + 1).padStart(2, '0')}</span>
+          <span class="badge ${run ? 'badge-green' : ''}">${run ? 'Resolved · ' + run.bestScore + '/100' : 'Open incident'}</span>
+        </div>
+        <h3>${esc(scenario.title)}</h3>
+        <p>${esc(scenario.subtitle)}</p>
+        <div class="scenario-card-meta">
+          <span>${icon('clock', 11)} target ${Math.round(scenario.timeTarget / 60)} min</span>
+          <span>${icon('layers', 11)} 3 hints</span>
+          <span>${icon('book', 11)} ${esc(lesson ? lesson.title : scenario.lesson)}</span>
+        </div>
+        ${run ? `<div class="scenario-best"><span>Best ${run.bestScore}</span><span>${formatClock(run.bestSeconds)}</span><span>${run.attempts} attempt${run.attempts === 1 ? '' : 's'}</span></div>` : ''}
+        <div class="scenario-card-actions">
+          <a class="btn btn-sm ${run ? 'btn-ghost' : 'btn-primary'}" href="#/scenarios/${scenario.id}">${run ? 'Run again' : 'Open incident'} ${icon('arrow', 13)}</a>
+          <a class="text-link" href="#/lesson/${scenario.lesson}">Related lesson</a>
+        </div>
+      </article>`;
+    }).join('');
+
+    return `
+    <div class="view">
+      <section class="page-hero">
+        <div class="shell page-hero-inner">
+          <div>
+            <p class="eyebrow">Broken Systems · five incidents</p>
+            <h1>It is 2 a.m.<br><em>What do you check?</em></h1>
+            <p class="lede">Five small, realistic failures in the stateful sandbox. Each one has a story, a live goal check, a three-level hint ladder, and a time target. You are not reading an answer key. You are working the incident.</p>
+            <div class="hero-actions" style="margin-top:26px;"><a class="btn btn-primary" href="#/scenarios/selinux-httpd">Take the first call ${icon('arrow', 15, 'arrow')}</a><a class="btn btn-ghost" href="#/learn">Review the lessons</a></div>
+          </div>
+          <div class="page-hero-aside">
+            <div class="progress-panel">
+              <div class="progress-panel-row"><span>Incidents resolved</span><strong>${completed} / ${RHEL.scenarios.length}</strong></div>
+              <div class="progress-panel-track"><span class="progress-panel-fill" style="width:${Math.round(completed / RHEL.scenarios.length * 100)}%"></span></div>
+              <small>${scores.length ? 'Average best score ' + average + '/100. Hints cost 15 points each.' : 'Start anywhere. The sandbox remembers the story state.'}</small>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div class="scenario-page shell">
+        <div class="curriculum-head">
+          <h2>Pick up the pager</h2>
+          <p>Every scenario resets the sandbox to its own broken state. Use the terminal, check the goal, then restore the next incident.</p>
+        </div>
+        <div class="scenario-grid">${cards}</div>
+        <div class="scenario-legend">
+          <span class="timeline-dot"></span><strong>Scoring:</strong> start at 100. Hints cost 15 each; time over the target costs up to 45. Your best result is kept.
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function viewScenarioDetail(scenario) {
+    var run = scenarioRun(scenario.id);
+    var isActive = !!(state.scenarioActive && state.scenarioActive.id === scenario.id);
+    var hints = isActive ? state.scenarioActive.hints : 0;
+    var goal = isActive && scenarioGoalMet(scenario);
+    var elapsed = isActive ? scenarioElapsed() : 0;
+    var lesson = RHEL.getLesson(scenario.lesson);
+    var other = state.scenarioActive && !isActive ? RHEL.scenarios.find(state.scenarioActive.id) : null;
+
+    var hintBlocks = scenario.hints.map(function (hint, index) {
+      var revealed = index < hints;
+      var next = index === hints;
+      return `<div class="scenario-hint ${revealed ? 'is-revealed' : ''}">
+        <div class="scenario-hint-head">
+          <span>${index === 0 ? 'Nudge' : index === 1 ? 'Bigger hint' : 'Answer'}</span>
+          ${revealed ? '<span class="badge badge-green">Revealed</span>' : next && isActive ? `<button class="btn btn-sm btn-ghost" data-scenario-hint="${index}">Reveal · −15 pts</button>` : '<span class="scenario-locked">Locked</span>'}
+        </div>
+        ${revealed ? `<div class="scenario-hint-body">${hint}</div>` : '<p class="scenario-hint-veiled">Reveal the previous level first.</p>'}
+      </div>`;
+    }).join('');
+
+    return `
+    <div class="view">
+      <section class="page-hero scenario-hero">
+        <div class="shell page-hero-inner">
+          <div>
+            <div class="breadcrumb"><a href="#/scenarios">Broken Systems</a><span class="slash">/</span><span>${esc(scenario.title)}</span></div>
+            <p class="eyebrow">Incident · time target ${Math.round(scenario.timeTarget / 60)} min</p>
+            <h1>${esc(scenario.title)}</h1>
+            <p class="lede">${esc(scenario.story)}</p>
+            <div class="hero-actions" style="margin-top:26px;">
+              <button class="btn btn-primary" data-scenario-start="${scenario.id}">${isActive ? 'Restart incident' : run ? 'Run this incident again' : 'Start incident'} ${icon('play', 14)}</button>
+              <button class="btn btn-ghost" data-open-sandbox>Open terminal ${icon('terminal', 15)}</button>
+              <a class="btn btn-ghost" href="#/lesson/${scenario.lesson}">Lesson: ${esc(lesson ? lesson.title : scenario.lesson)}</a>
+            </div>
+            ${other ? `<p class="scenario-other">Another incident is active: <a href="#/scenarios/${other.id}">${esc(other.title)}</a>. Starting this one resets the sandbox.</p>` : ''}
+          </div>
+          <div class="page-hero-aside">
+            <div class="progress-panel scenario-timer-panel">
+              <div class="progress-panel-row"><span>Incident clock</span><strong data-scenario-clock>${formatClock(elapsed)}</strong></div>
+              <div class="scenario-target-row"><span>Target ${formatClock(scenario.timeTarget)}</span><span>${hints} hint${hints === 1 ? '' : 's'} used</span></div>
+              <div class="scenario-goal-live ${goal ? 'is-met' : ''}" data-scenario-goal aria-live="polite">
+                <span class="status-dot"></span>
+                <strong>${goal ? 'Goal met' : isActive ? 'Goal not met yet' : 'Not started'}</strong>
+                <small>${goal ? 'The live check passes. Resolving the incident…' : 'The check runs against the sandbox state.'}</small>
+              </div>
+              ${run ? `<small class="scenario-best-note">Best score ${run.bestScore}/100 · best time ${formatClock(run.bestSeconds)} · ${run.attempts} attempt${run.attempts === 1 ? '' : 's'}</small>` : ''}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="scenario-workspace shell">
+        <div class="scenario-main">
+          <article class="scenario-brief">
+            <p class="eyebrow">The pager</p>
+            <h2>Read the evidence.<br><em>Change one thing.</em></h2>
+            <p>${esc(scenario.story)}</p>
+            <div class="scenario-brief-note"><strong>Goal:</strong> diagnose the failure in the terminal sandbox and satisfy the live check without revealing the answer. The sandbox is disposable; reset or snapshot from the terminal panel at any time.</div>
+          </article>
+          <section class="scenario-hints">
+            <div class="section-head-row"><div><p class="eyebrow">Hint ladder</p><h2>Nudge, then clue, <em>then answer.</em></h2></div><span class="badge">${hints}/3 revealed</span></div>
+            ${hintBlocks}
+          </section>
+          <section class="scenario-goal-card ${goal ? 'is-met' : ''}">
+            <div>
+              <p class="eyebrow">Goal check</p>
+              <h2>Prove the system is healthy.</h2>
+              <p>${goal ? 'The goal check is passing. This incident will be scored automatically.' : isActive ? 'Not yet. Inspect the state, make the fix, then let the automatic check run.' : 'Start the incident to load its broken sandbox state and enable the goal check.'}</p>
+            </div>
+            <div class="scenario-goal-actions">
+              <button class="btn btn-sm btn-ghost" data-scenario-check="${scenario.id}" ${isActive ? '' : 'disabled'}>Check goal now</button>
+              <span class="scenario-goal-status ${goal ? 'is-met' : ''}" data-scenario-goal-text>${goal ? 'PASS' : isActive ? 'WAITING' : 'IDLE'}</span>
+            </div>
+          </section>
+        </div>
+        <aside class="scenario-side">
+          <div class="scenario-side-card">
+            <p class="eyebrow">Runbook discipline</p>
+            <ol>
+              <li>Confirm the symptom with a command, not a guess.</li>
+              <li>Find the layer: filesystem, context, identity, service, or network.</li>
+              <li>Change one thing and re-check the live goal.</li>
+              <li>Write down the evidence before you close the incident.</li>
+            </ol>
+          </div>
+          <div class="scenario-side-card">
+            <p class="eyebrow">Scoring</p>
+            <div class="scenario-score-row"><span>Base</span><strong>100</strong></div>
+            <div class="scenario-score-row"><span>Each hint</span><strong>−15</strong></div>
+            <div class="scenario-score-row"><span>Time over target</span><strong>up to −45</strong></div>
+            <p class="scenario-side-note">The result is saved to your progress and included in the export.</p>
+          </div>
+          <div class="scenario-side-card">
+            <p class="eyebrow">Related lesson</p>
+            <a class="scenario-lesson-link" href="#/lesson/${scenario.lesson}"><strong>${esc(lesson ? lesson.title : scenario.lesson)}</strong><span>${esc(lesson ? lesson.subtitle : '')}</span>${icon('arrow', 14)}</a>
+          </div>
+        </aside>
+      </div>
+    </div>`;
+  }
+
+  /* ------------------------------------------------------------------------
+     Spaced review
+     ------------------------------------------------------------------------ */
+
+  function viewReview(section) {
+    if (section === 'session') return viewReviewSession();
+    var stats = reviewStats();
+    var active = state.review.active;
+    var last = state.review.lastSession;
+    var commandMature = getReviewCards().filter(function (card) {
+      return card.kind === 'command' && state.review.items[card.id] && state.review.items[card.id].box >= 4;
+    }).length;
+
+    return `
+    <div class="view">
+      <section class="page-hero">
+        <div class="shell page-hero-inner">
+          <div>
+            <p class="eyebrow">Review · spaced repetition</p>
+            <h1>Remember it<br><em>tomorrow.</em></h1>
+            <p class="lede">Checkpoint questions return at widening intervals. Every command in the index becomes a two-way flashcard: command to meaning, and meaning to command. Five boxes, no streak guilt, no account.</p>
+            <div class="hero-actions" style="margin-top:26px;">
+              <button class="btn btn-primary" data-start-review="all">Start due review ${icon('play', 14)}</button>
+              <a class="btn btn-ghost" href="#/mastery">Objective mastery ${icon('target', 15)}</a>
+            </div>
+          </div>
+          <div class="page-hero-aside">
+            <div class="progress-panel">
+              <div class="progress-panel-row"><span>Due today</span><strong data-review-due>${stats.due}</strong></div>
+              <div class="progress-panel-track"><span class="progress-panel-fill" style="width:${stats.total ? Math.round(stats.due / stats.total * 100) : 0}%"></span></div>
+              <small>${stats.fresh} new · ${stats.learning} learning · ${stats.mature} mature</small>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="review-page shell">
+        ${active ? `<div class="review-resume">
+          <div><p class="eyebrow">Session in progress</p><strong>${active.queue.length - active.index} cards left · ${active.correct} correct · ${active.again} again</strong></div>
+          <a class="btn btn-sm btn-primary" href="#/review/session">Resume session ${icon('arrow', 13)}</a>
+        </div>` : ''}
+        ${last ? `<div class="review-last"><span>Last session: ${last.reviewed} cards reviewed · ${last.correct} correct · ${last.again} again</span><span>${new Date(last.completedAt).toLocaleDateString()}</span></div>` : ''}
+
+        <div class="review-stat-grid">
+          <article class="review-stat"><span>Total cards</span><strong>${stats.total}</strong><small>${stats.quizDue} quiz cards due · ${stats.commandDue} command cards due</small></article>
+          <article class="review-stat"><span>Due today</span><strong data-review-due>${stats.due}</strong><small>New cards count as due</small></article>
+          <article class="review-stat"><span>Mature</span><strong>${stats.mature}</strong><small>${commandMature} command directions in box 4+</small></article>
+          <article class="review-stat"><span>Mastery map</span><strong>80</strong><small>Objectives with quiz and lab evidence</small></article>
+        </div>
+
+        <div class="review-options">
+          <article class="review-option">
+            <span class="review-option-icon">${icon('target', 20)}</span>
+            <h2>Due review</h2>
+            <p>Mix checkpoint questions and both flashcard directions. The queue is capped at 20 cards per session.</p>
+            <button class="btn btn-primary btn-sm" data-start-review="all">Review everything ${icon('arrow', 13)}</button>
+          </article>
+          <article class="review-option">
+            <span class="review-option-icon">${icon('book', 20)}</span>
+            <h2>Quiz only</h2>
+            <p>${stats.quizDue} checkpoint questions are due today. Good for a short recall pass before the exam.</p>
+            <button class="btn btn-ghost btn-sm" data-start-review="quiz">Review quiz cards</button>
+          </article>
+          <article class="review-option">
+            <span class="review-option-icon">${icon('terminal', 20)}</span>
+            <h2>Commands both ways</h2>
+            <p>${stats.commandDue} command directions due. See a command and recall what it does — then reverse it.</p>
+            <button class="btn btn-ghost btn-sm" data-start-review="commands">Review commands</button>
+          </article>
+        </div>
+
+        <section class="review-explainer">
+          <div><p class="eyebrow">How the boxes work</p><h2>Short intervals.<br><em>Long memory.</em></h2></div>
+          <div class="review-boxes">
+            ${['Again → 10 min', 'Box 2 → 1 day', 'Box 3 → 3 days', 'Box 4 → 7 days', 'Box 5 → 21 days'].map(function (text, index) { return `<span class="review-box ${index === 0 ? 'is-start' : ''}"><strong>${index + 1}</strong>${text}</span>`; }).join('')}
+          </div>
+          <p class="review-source">Quiz cards come from the 48 checkpoint questions. Command cards come from the deduplicated command index, generated in both directions. Everything is stored locally and included in the progress export.</p>
+        </section>
+      </div>
+    </div>`;
+  }
+
+  function viewReviewSession() {
+    var active = state.review.active;
+    if (!active) {
+      var last = state.review.lastSession;
+      return `
+      <div class="view">
+        <section class="page-hero">
+          <div class="shell page-hero-inner"><div>
+            <div class="breadcrumb"><a href="#/review">Review</a><span class="slash">/</span><span>Session</span></div>
+            <p class="eyebrow">Review session</p>
+            <h1>${last ? 'Session <em>complete.</em>' : 'No session <em>running.</em>'}</h1>
+            <p class="lede">${last ? 'You reviewed ' + last.reviewed + ' cards, marked ' + last.correct + ' correct, and sent ' + last.again + ' back to box 1. The schedule has already updated.' : 'Start a session from the review dashboard. Due cards are waiting.'}</p>
+            <div class="hero-actions" style="margin-top:26px;"><a class="btn btn-primary" href="#/review">Back to review ${icon('arrow', 14)}</a><button class="btn btn-ghost" data-start-review="all">Start another session</button></div>
+          </div></div>
+        </section>
+      </div>`;
+    }
+
+    if (active.index >= active.queue.length) {
+      return viewReviewSessionSummary(active);
+    }
+
+    var card = reviewCardById(active.queue[active.index]);
+    if (!card) return viewReview('');
+    var answerMarkup = card.kind === 'command' && card.direction === 'reverse'
+      ? '<code>' + esc(card.answer) + '</code>'
+      : esc(card.answer);
+    var promptMarkup = card.kind === 'command' && card.direction === 'forward'
+      ? '<code>' + esc(card.prompt) + '</code>'
+      : esc(card.prompt);
+    var pct = Math.round((active.index / active.queue.length) * 100);
+    var filterLabel = active.filter === 'quiz' ? 'Quiz only' : active.filter === 'commands' ? 'Commands only' : 'Mixed review';
+
+    return `
+    <div class="view">
+      <div class="review-session shell">
+        <h1 class="sr-only">Review session</h1>
+        <div class="review-session-top">
+          <div class="breadcrumb"><a href="#/review">Review</a><span class="slash">/</span><span>${esc(filterLabel)}</span></div>
+          <div class="review-session-progress"><span>${active.index + 1} / ${active.queue.length}</span><span>${active.correct} correct</span><span>${active.again} again</span></div>
+          <div class="progress-panel-track"><span class="progress-panel-fill" style="width:${pct}%"></span></div>
+        </div>
+
+        <article class="review-card" id="review-card-focus" tabindex="-1" aria-labelledby="review-prompt-label">
+          <div class="review-card-meta">
+            <span class="badge">${esc(card.label)}</span>
+            <span>${esc(card.lessonTitle)}</span>
+            <span>${esc(card.kind === 'quiz' ? 'Checkpoint' : card.category || 'Command index')}</span>
+          </div>
+          <p class="eyebrow" id="review-prompt-label">${card.kind === 'quiz' ? 'Question' : card.direction === 'forward' ? 'What does this command do?' : 'Which command does this?'}</p>
+          <div class="review-prompt">${promptMarkup}</div>
+          <div class="review-answer ${reviewRevealed ? 'is-visible' : ''}" aria-live="polite">
+            ${reviewRevealed ? `<span class="review-answer-label">Answer</span><div class="review-answer-main">${answerMarkup}</div><p>${esc(card.detail || '')}</p>` : '<span>Answer hidden. Recall it before revealing.</span>'}
+          </div>
+          <div class="review-card-actions">
+            ${reviewRevealed
+              ? `<button class="btn btn-ghost" data-review-grade="again">Again <kbd>1</kbd></button><button class="btn btn-primary" data-review-grade="good">Got it <kbd>2</kbd></button>`
+              : `<button class="btn btn-primary" data-review-reveal>Reveal answer <kbd>space</kbd></button>`}
+          </div>
+          <div class="review-keyboard-hint">Keyboard: <kbd>space</kbd> reveal · <kbd>1</kbd> again · <kbd>2</kbd> got it</div>
+        </article>
+
+        <div class="review-session-foot">
+          <a class="text-link" href="#/review">Pause and return later ${icon('arrow', 13)}</a>
+          <span>${active.queue.length - active.index - 1} cards after this one</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function viewReviewSessionSummary(active) {
+    return `
+    <div class="view">
+      <section class="page-hero">
+        <div class="shell page-hero-inner"><div>
+          <p class="eyebrow">Review session · complete</p>
+          <h1>${active.correct} correct.<br><em>${active.again} back in the queue.</em></h1>
+          <p class="lede">The cards you marked "again" return in ten minutes. Cards you knew move outward through the boxes. Small, regular passes beat one heroic reread.</p>
+          <div class="hero-actions" style="margin-top:26px;"><a class="btn btn-primary" href="#/review">Back to review ${icon('arrow', 14)}</a><button class="btn btn-ghost" data-start-review="all">Review more due cards</button></div>
+        </div></div>
+      </section>
+    </div>`;
+  }
+
+  /* ------------------------------------------------------------------------
+     Objective mastery
+     ------------------------------------------------------------------------ */
+
+  function viewMastery() {
+    var counts = { mastered: 0, practicing: 0, started: 0, notstarted: 0 };
+    var moduleMarkup = RHEL.modules.map(function (module) {
+      var lessons = module.lessons.map(function (lessonId) {
+        var lesson = RHEL.lessons[lessonId];
+        var rows = lesson.objectives.map(function (objective, index) {
+          var evidence = objectiveScore(lesson, index);
+          var statusKey = evidence.status.toLowerCase().replace(/\s+/g, '');
+          counts[statusKey] = (counts[statusKey] || 0) + 1;
+          var quizClass = evidence.quizCorrect ? 'is-good' : evidence.answer === undefined ? '' : 'is-bad';
+          var quizText = evidence.quizCorrect ? 'correct' : evidence.answer === undefined ? 'not answered' : 'needs review';
+          return `<div class="mastery-row">
+            <span class="mastery-status is-${statusKey}" aria-label="${evidence.status}"></span>
+            <div class="mastery-objective"><strong>${esc(objective)}</strong><span>Objective ${String(index + 1).padStart(2, '0')}</span></div>
+            <div class="mastery-evidence">
+              <span class="evidence-chip ${quizClass}">Checkpoint ${evidence.questionIndex + 1} · ${quizText}</span>
+              <span class="evidence-chip ${evidence.labDone ? 'is-good' : ''}">Lab step ${evidence.stepIndex + 1} · ${evidence.labDone ? 'done' : 'open'}</span>
+              <span class="evidence-chip ${evidence.manual ? 'is-good' : ''}">Objective check · ${evidence.manual ? 'checked' : 'open'}</span>
+            </div>
+            <span class="mastery-score">${evidence.score}<small>%</small></span>
+          </div>`;
+        }).join('');
+        return `<details class="mastery-lesson" open>
+          <summary><span><strong>${esc(lesson.title)}</strong><small>${lesson.objectives.length} objectives · ${esc(module.title)}</small></span><a href="#/lesson/${lesson.id}" class="text-link" onclick="event.stopPropagation()">Open lesson ${icon('arrow', 12)}</a></summary>
+          <div class="mastery-rows">${rows}</div>
+        </details>`;
+      }).join('');
+      return `<section class="mastery-module">
+        <div class="mastery-module-head"><span class="module-num">Module ${module.number}</span><h2>${esc(module.title)}</h2><p>${esc(module.blurb)}</p></div>
+        ${lessons}
+      </section>`;
+    }).join('');
+    var total = RHEL.lessonOrder.reduce(function (sum, id) { return sum + RHEL.lessons[id].objectives.length; }, 0);
+    var mastered = counts.mastered || 0;
+    var pct = total ? Math.round(mastered / total * 100) : 0;
+
+    return `
+    <div class="view">
+      <section class="page-hero">
+        <div class="shell page-hero-inner">
+          <div>
+            <p class="eyebrow">Mastery · 80 objectives · quiz + lab evidence</p>
+            <h1>Every objective.<br><em>Every piece of evidence.</em></h1>
+            <p class="lede">Level 01 has 80 checkable objectives. This map joins three signals for each one: a checkpoint question, a lab step, and your own objective check. It is a study instrument, not a certification decision.</p>
+          </div>
+          <div class="page-hero-aside">
+            <div class="progress-panel">
+              <div class="progress-panel-row"><span>Objectives mastered</span><strong>${mastered} / ${total}</strong></div>
+              <div class="progress-panel-track"><span class="progress-panel-fill" style="width:${pct}%"></span></div>
+              <small>${counts.practicing || 0} practicing · ${counts.started || 0} started · ${counts.notstarted || 0} not started</small>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div class="mastery-page shell">
+        <div class="mastery-legend">
+          <span><i class="mastery-status is-mastered"></i>Mastered · quiz + lab + check</span>
+          <span><i class="mastery-status is-practicing"></i>Practicing · some evidence</span>
+          <span><i class="mastery-status is-started"></i>Started</span>
+          <span><i class="mastery-status is-notstarted"></i>Not started</span>
+        </div>
+        <div class="mastery-note">Evidence is mapped from the lesson's checkpoint questions and lab steps in order. Open a lesson to change the underlying quiz, lab, and objective state. Lab steps with automatic sandbox checks update as you work.</div>
+        ${moduleMarkup}
+        <div class="mastery-footer-actions"><a class="btn btn-ghost btn-sm" href="#/review">Review due cards</a><a class="btn btn-primary btn-sm" href="#/exam">Take the final exam ${icon('arrow', 14)}</a></div>
+      </div>
+    </div>`;
+  }
+
+  /* ------------------------------------------------------------------------
+     Final exam
+     ------------------------------------------------------------------------ */
+
+  function viewExam(section) {
+    if (state.exam.active && section !== 'result') return viewExamActive();
+    if (section === 'result' && state.exam.lastResult) return viewExamResult();
+    return viewExamLanding();
+  }
+
+  function viewExamLanding() {
+    var config = RHEL.exam.config;
+    var last = state.exam.lastResult;
+    var quotaBase = Math.floor(config.questions / RHEL.modules.length);
+    var extra = config.questions % RHEL.modules.length;
+    var history = state.exam.history || [];
+
+    return `
+    <div class="view">
+      <section class="page-hero">
+        <div class="shell page-hero-inner">
+          <div>
+            <p class="eyebrow">Level 01 · final exam</p>
+            <h1>Thirty questions.<br><em>One machine.</em></h1>
+            <p class="lede">A timed checkpoint drawn across all four modules, balanced by module, plus one practical task checked directly against the stateful sandbox. You get one clock, a question navigator, and no answer key until you submit.</p>
+            <div class="hero-actions" style="margin-top:26px;">
+              <button class="btn btn-primary" data-exam-start>Start the exam ${icon('play', 14)}</button>
+              ${last ? `<a class="btn btn-ghost" href="#/exam/result">View last result ${icon('arrow', 14)}</a>` : '<a class="btn btn-ghost" href="#/review">Review first</a>'}
+            </div>
+          </div>
+          <div class="page-hero-aside">
+            <div class="progress-panel">
+              <div class="progress-panel-row"><span>Format</span><strong>${config.questions} + 1</strong></div>
+              <div class="progress-panel-track"><span class="progress-panel-fill" style="width:100%"></span></div>
+              <small>${config.minutes} minutes total · ${config.passScore}% to pass · practical required</small>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="exam-page shell">
+        <div class="exam-layout">
+          <section class="exam-rules">
+            <p class="eyebrow">Before the clock starts</p>
+            <h2>What this exam <em>tests.</em></h2>
+            <div class="exam-rule-grid">
+              <article><span>01</span><h3>30 checkpoint questions</h3><p>Drawn from all 16 lessons, balanced across the four modules. Roughly two questions per lesson.</p></article>
+              <article><span>02</span><h3>One live practical</h3><p>${esc(RHEL.exam.practical.title)}. The sandbox checks users, groups, ownership, and mode.</p></article>
+              <article><span>03</span><h3>${config.minutes} minutes</h3><p>The timer runs while you work, including the practical. At zero, the exam submits automatically.</p></article>
+              <article><span>04</span><h3>Skills breakdown</h3><p>Your result shows accuracy per module, the practical result, and a printable certificate at ${config.passScore}% or above.</p></article>
+            </div>
+            <div class="exam-balance">
+              <p class="eyebrow">Module balance</p>
+              ${RHEL.modules.map(function (module, index) {
+                return `<div class="exam-balance-row"><span>Module ${module.number} · ${esc(module.title)}</span><strong>${quotaBase + (index < extra ? 1 : 0)} questions</strong></div>`;
+              }).join('')}
+            </div>
+          </section>
+          <aside class="exam-side">
+            <div class="scenario-side-card">
+              <p class="eyebrow">Practical task</p>
+              <h3>${esc(RHEL.exam.practical.title)}</h3>
+              <ol>${RHEL.exam.practical.steps.map(function (step) { return '<li>' + step + '</li>'; }).join('')}</ol>
+              <p class="scenario-side-note">You can open the terminal at any time. The practical is checked against the current sandbox state, not a text box. If a previous attempt already satisfies it, starting the exam loads a clean seed automatically.</p>
+            </div>
+            ${last ? `<div class="scenario-side-card"><p class="eyebrow">Last result</p><div class="exam-last-score"><strong>${last.score}%</strong><span>${last.pass ? 'Passed' : 'Not passed'}</span></div><a class="text-link" href="#/exam/result">Open result page ${icon('arrow', 12)}</a></div>` : ''}
+            ${history.length > 1 ? `<div class="scenario-side-card"><p class="eyebrow">Attempts</p>${history.slice(0, 4).map(function (item) { return `<div class="exam-history-row"><span>${new Date(item.completedAt).toLocaleDateString()}</span><strong>${item.score}%</strong></div>`; }).join('')}</div>` : ''}
+          </aside>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function viewExamActive() {
+    var active = state.exam.active;
+    var total = active.questionIds.length;
+    var index = Math.max(0, Math.min(total, active.index));
+    var remaining = examRemaining();
+    var answered = examAnsweredCount();
+    var practical = index === total;
+    var item = practical ? null : RHEL.exam.question(active.questionIds[index]);
+    var selected = item ? active.answers[item.id] : undefined;
+    var practicalPassed = examPracticalPassed();
+    var letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+    var questionMarkup = practical ? `
+      <div class="exam-practical" data-exam-practical>
+        <div class="exam-question-meta"><span class="badge badge-red">Practical</span><span>Live sandbox check</span></div>
+        <p class="eyebrow">Task</p>
+        <h2>${esc(RHEL.exam.practical.title)}</h2>
+        <p class="exam-practical-intro">${esc(RHEL.exam.practical.intro)}</p>
+        <ol class="exam-practical-steps">${RHEL.exam.practical.steps.map(function (step) { return '<li>' + step + '</li>'; }).join('')}</ol>
+        <div class="exam-practical-live ${practicalPassed ? 'is-met' : ''}" data-exam-practical-status aria-live="polite">
+          <span class="status-dot"></span>
+          <strong>${practicalPassed ? 'Practical check passing' : 'Waiting for a passing check'}</strong>
+          <small>${practicalPassed ? 'Your current sandbox state satisfies every condition.' : 'Open the terminal, complete the work, and the live check will update.'}</small>
+        </div>
+        <div class="exam-practical-actions"><button class="btn btn-primary btn-sm" data-open-sandbox>Open terminal sandbox ${icon('terminal', 14)}</button><button class="btn btn-ghost btn-sm" data-exam-check-practical>Re-check now</button></div>
+      </div>` : `
+      <div class="exam-question">
+        <div class="exam-question-meta"><span class="badge">Question ${index + 1} of ${total}</span><span>${esc(item.lessonTitle)}</span><span>Module ${RHEL.getModule(item.module) ? RHEL.getModule(item.module).number : ''}</span></div>
+        <p class="eyebrow">Choose one</p>
+        <h2>${esc(item.question.q)}</h2>
+        <div class="exam-options" role="radiogroup" aria-label="Answer options">
+          ${item.question.options.map(function (option, optionIndex) {
+            return `<label class="exam-option ${selected === optionIndex ? 'is-selected' : ''}">
+              <input type="radio" name="exam-option" value="${optionIndex}" data-exam-option="${optionIndex}" ${selected === optionIndex ? 'checked' : ''}>
+              <span class="exam-option-letter">${letters[optionIndex]}</span>
+              <span>${esc(option)}</span>
+            </label>`;
+          }).join('')}
+        </div>
+      </div>`;
+
+    var nav = active.questionIds.map(function (id, questionIndex) {
+      return `<button class="exam-nav-item ${active.answers[id] !== undefined ? 'is-answered' : ''} ${questionIndex === index ? 'is-current' : ''}" data-exam-index="${questionIndex}" aria-label="Question ${questionIndex + 1}${active.answers[id] !== undefined ? ', answered' : ', unanswered'}">${questionIndex + 1}</button>`;
+    }).join('') + `<button class="exam-nav-item exam-nav-practical ${practical ? 'is-current' : ''} ${practicalPassed ? 'is-answered' : ''}" data-exam-index="${total}" aria-label="Practical task">P</button>`;
+
+    return `
+    <div class="view">
+      <h1 class="sr-only">Final exam in progress</h1>
+      <div class="exam-session-bar">
+        <div class="shell exam-session-inner">
+          <div class="exam-session-title"><span class="badge badge-red">Live exam</span><strong>Level 01 final</strong><span><span data-exam-answered-count>${answered}</span> / ${total} answered</span></div>
+          <div class="exam-clock ${remaining <= 300 ? 'is-urgent' : ''}"><span>Time remaining</span><strong data-exam-clock aria-label="Time remaining">${formatClock(remaining)}</strong></div>
+          <button class="btn btn-sm btn-primary" data-exam-submit>Submit exam</button>
+        </div>
+      </div>
+
+      <div class="exam-page shell">
+        <div class="exam-session-layout">
+          <aside class="exam-navigator">
+            <p class="eyebrow">Questions</p>
+            <div class="exam-nav-grid">${nav}</div>
+            <div class="exam-nav-legend"><span><i class="is-current"></i>Current</span><span><i class="is-answered"></i>Answered</span></div>
+            <div class="exam-nav-progress"><div class="progress-panel-track"><span class="progress-panel-fill" style="width:${Math.round(answered / total * 100)}%"></span></div><small>${total - answered} unanswered</small></div>
+          </aside>
+          <main class="exam-question-wrap">
+            ${questionMarkup}
+            <div class="exam-question-actions">
+              <button class="btn btn-ghost btn-sm" data-exam-goto="prev" ${index === 0 ? 'disabled' : ''}>${icon('arrow', 13)} Previous</button>
+              ${practical ? '<span class="exam-practical-note">Review your answers, then submit.</span>' : `<button class="btn btn-primary btn-sm" data-exam-goto="next">Next ${icon('arrow', 13)}</button>`}
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function viewExamResult() {
+    var result = state.exam.lastResult;
+    var config = RHEL.exam.config;
+    var eligible = result.score >= config.passScore && result.practicalPassed;
+    var learner = state.exam.learnerName || 'Your name';
+    var certId = 'RHEL-01-' + String(result.id || Date.now()).replace(/[^a-z0-9]/gi, '').slice(-8).toUpperCase();
+    var moduleStats = result.moduleStats || RHEL.exam.moduleStats(result.questionIds || [], result.answers || {});
+    var weak = [];
+
+    var breakdown = RHEL.modules.map(function (module) {
+      var stat = moduleStats[module.id] || { correct: 0, total: 0 };
+      var pct = stat.total ? Math.round(stat.correct / stat.total * 100) : 0;
+      if (pct < 70) weak.push(module);
+      return `<article class="exam-skill-card">
+        <div class="exam-skill-head"><span>Module ${module.number}</span><strong>${pct}%</strong></div>
+        <h3>${esc(module.title)}</h3>
+        <div class="progress-panel-track"><span class="progress-panel-fill ${pct < 70 ? 'is-weak' : ''}" style="width:${pct}%"></span></div>
+        <p>${stat.correct} of ${stat.total} checkpoint questions correct</p>
+      </article>`;
+    }).join('');
+
+    return `
+    <div class="view">
+      <section class="page-hero exam-result-hero ${result.pass ? 'is-pass' : 'is-fail'}">
+        <div class="shell page-hero-inner">
+          <div>
+            <p class="eyebrow">Level 01 · final exam result</p>
+            <h1>${result.pass ? 'Passed.' : 'Not yet.'}<br><em>${result.score}%.</em></h1>
+            <p class="lede">${result.correct} of ${result.total} checkpoint questions correct. Practical task ${result.practicalPassed ? 'passed' : 'not passing'}. ${result.pass ? 'You met the 80% bar and the live machine requirement.' : 'The pass mark is 80% plus a passing practical. The breakdown below shows where to spend the next session.'}</p>
+            <div class="hero-actions" style="margin-top:26px;"><button class="btn btn-primary" data-exam-start>Retake exam ${icon('reset', 14)}</button><a class="btn btn-ghost" href="#/mastery">Objective mastery</a><a class="btn btn-ghost" href="#/review">Review due cards</a></div>
+          </div>
+          <div class="page-hero-aside">
+            <div class="progress-panel">
+              <div class="progress-panel-row"><span>Final score</span><strong>${result.score}%</strong></div>
+              <div class="progress-panel-track"><span class="progress-panel-fill" style="width:${result.score}%"></span></div>
+              <small>${formatDuration(result.durationSeconds)} used · ${result.completedAt ? new Date(result.completedAt).toLocaleString() : ''}</small>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="exam-result-page shell">
+        <div class="exam-result-summary">
+          <article><span>Questions</span><strong>${result.correct}/${result.total}</strong><small>Correct</small></article>
+          <article><span>Practical</span><strong>${result.practicalPassed ? 'Pass' : 'Fail'}</strong><small>Live sandbox check</small></article>
+          <article><span>Time</span><strong>${formatDuration(result.durationSeconds)}</strong><small>of ${config.minutes}:00</small></article>
+          <article><span>Certificate</span><strong>${eligible ? 'Ready' : 'Locked'}</strong><small>${eligible ? 'Print below' : '80% + practical'}</small></article>
+        </div>
+
+        <section class="exam-breakdown">
+          <div class="section-head"><div><p class="eyebrow">Skills breakdown</p><h2>Where you are <em>strong.</em></h2></div><p>Each module is scored from its share of the 30 checkpoint questions. Use the weak modules below as the next study queue.</p></div>
+          <div class="exam-skill-grid">${breakdown}</div>
+          ${weak.length ? `<div class="exam-weak-links"><strong>Review next:</strong>${weak.map(function (module) { return `<a href="#/lesson/${module.lessons[0]}">${esc(module.title)}</a>`; }).join('')}</div>` : ''}
+        </section>
+
+        <section class="exam-practical-result ${result.practicalPassed ? 'is-met' : ''}">
+          <div><p class="eyebrow">Practical task</p><h2>${esc(RHEL.exam.practical.title)}</h2><p>${result.practicalPassed ? 'The live sandbox state satisfied group membership, ownership, home directory, and setgid directory mode.' : 'The practical did not pass at submission. The task is not a text answer: it is checked against the machine state.'}</p></div>
+          <span class="exam-practical-badge">${result.practicalPassed ? 'PASS' : 'NOT PASSING'}</span>
+        </section>
+      </div>
+
+        ${eligible ? `<section class="certificate-shell shell" id="completion-certificate">
+          <div class="certificate-controls no-print">
+            <label for="cert-name">Name for the certificate</label>
+            <input id="cert-name" type="text" maxlength="80" value="${escAttr(state.exam.learnerName)}" placeholder="Your name" data-cert-name autocomplete="name">
+            <button class="btn btn-primary btn-sm" data-print-certificate>${icon('download', 13)} Print certificate</button>
+          </div>
+          <article class="certificate" aria-label="Printable completion certificate">
+            <div class="certificate-rule"></div>
+            <p class="certificate-kicker">RHEL Fieldbook · Level 01 · Foundations</p>
+            <h2>Certificate of Completion</h2>
+            <p class="certificate-awarded">This certifies that</p>
+            <p class="certificate-name" data-cert-name-text>${esc(learner)}</p>
+            <p class="certificate-copy">has completed the Level 01 Foundations final exam with a score of <strong>${result.score}%</strong>, including the practical sandbox task: <strong>${esc(RHEL.exam.practical.title)}</strong>.</p>
+            <div class="certificate-meta"><span><strong>${result.score}%</strong>Final score</span><span><strong>${result.correct}/${result.total}</strong>Questions</span><span><strong>${new Date(result.completedAt).toLocaleDateString()}</strong>Date</span><span><strong>${certId}</strong>Certificate ID</span></div>
+            <p class="certificate-small">Independent study project. Not affiliated with, endorsed by, or sponsored by Red Hat, Inc. This certificate records completion inside this fieldbook; it is not an industry certification.</p>
+            <div class="certificate-rule"></div>
+          </article>
+        </section>` : `<section class="certificate-shell shell is-locked">
+          <div class="certificate-lock"><span class="badge">Locked</span><h2>Completion certificate</h2><p>Pass both the 30-question checkpoint and the practical task to unlock the printable certificate. Current score: ${result.score}%.</p><a class="btn btn-ghost btn-sm" href="#/review">Start a review session</a></div>
+        </section>`}
+    </div>`;
+  }
+
   function viewNotFound() {
     return `
     <div class="view">
@@ -1051,6 +2071,18 @@
     if (name === 'lesson') {
       return { name: 'lesson', id: parts[1] || '', section: parts[2] || '' };
     }
+    if (name === 'scenarios') {
+      return { name: 'scenarios', id: parts[1] || '' };
+    }
+    if (name === 'review') {
+      return { name: 'review', section: parts[1] || '' };
+    }
+    if (name === 'exam') {
+      return { name: 'exam', section: parts[1] || '' };
+    }
+    if (name === 'mastery') {
+      return { name: 'mastery' };
+    }
     if (['learn', 'roadmap', 'labs', 'commands'].indexOf(name) !== -1) {
       return { name: name };
     }
@@ -1058,7 +2090,7 @@
   }
 
   function setActiveNav(name) {
-    activeNav = name === 'lesson' ? 'learn' : name;
+    activeNav = name === 'lesson' ? 'learn' : name === 'mastery' ? 'review' : name;
     document.querySelectorAll('[data-nav]').forEach(function (link) {
       link.classList.toggle('is-active', link.getAttribute('data-nav') === activeNav);
       if (link.getAttribute('data-nav') === activeNav) link.setAttribute('aria-current', 'page');
@@ -1072,6 +2104,19 @@
     if (route.name === 'labs') title = 'Labs · RHEL Fieldbook';
     if (route.name === 'commands') title = 'Command index · RHEL Fieldbook';
     if (route.name === 'roadmap') title = 'The full path · RHEL Fieldbook';
+    if (route.name === 'scenarios') {
+      var scenario = route.id ? RHEL.scenarios.find(route.id) : null;
+      title = scenario ? scenario.title + ' · Broken Systems' : 'Broken Systems · RHEL Fieldbook';
+    }
+    if (route.name === 'review') title = route.section === 'session' ? 'Review session · RHEL Fieldbook' : 'Review · RHEL Fieldbook';
+    if (route.name === 'exam') {
+      title = state.exam.active && route.section !== 'result'
+        ? 'Final exam in progress · RHEL Fieldbook'
+        : route.section === 'result' && state.exam.lastResult
+          ? 'Final exam result · RHEL Fieldbook'
+          : 'Final exam · RHEL Fieldbook';
+    }
+    if (route.name === 'mastery') title = 'Objective mastery · RHEL Fieldbook';
     if (route.name === 'lesson') {
       var lesson = RHEL.getLesson(route.id);
       if (lesson) title = lesson.title + ' · RHEL Fieldbook';
@@ -1084,12 +2129,20 @@
     opts = opts || {};
     var route = parseRoute();
     currentRoute = route;
+    if (!(route.name === 'review' && route.section === 'session')) reviewRevealed = false;
+    if (route.name === 'review' && route.section === 'session' && state.review.active && state.review.active.index >= state.review.active.queue.length) {
+      finalizeReviewSession();
+    }
     var html;
     if (route.name === 'home') html = viewHome();
     else if (route.name === 'learn') html = viewLearn();
     else if (route.name === 'labs') html = viewLabs();
     else if (route.name === 'commands') html = viewCommands();
     else if (route.name === 'roadmap') html = viewRoadmap();
+    else if (route.name === 'scenarios') html = viewScenarios(route.id);
+    else if (route.name === 'review') html = viewReview(route.section);
+    else if (route.name === 'exam') html = viewExam(route.section);
+    else if (route.name === 'mastery') html = viewMastery();
     else if (route.name === 'lesson') html = viewLesson(route.id, route.section);
     else html = viewNotFound();
 
@@ -1098,6 +2151,8 @@
     setTitle(route);
     updateProgressUI();
     enhanceCodeBlocks();
+    updateLiveClocks();
+    refreshExamPractical();
 
     if (route.name === 'lesson' && RHEL.getLesson(route.id)) {
       state.lastLesson = route.id;
@@ -1107,6 +2162,13 @@
 
     if (route.name === 'labs') setupLabFilters();
     if (route.name === 'commands') setupCommandFilters();
+    if (route.name === 'review' && route.section === 'session') {
+      var focusCard = document.getElementById('review-card-focus');
+      if (focusCard) window.setTimeout(function () { focusCard.focus(); }, 40);
+    }
+    if (route.name === 'exam' && state.exam.active && route.section !== 'result' && examRemaining() <= 0) {
+      window.setTimeout(function () { submitExam(true); }, 30);
+    }
 
     closeNav();
     closePalette();
@@ -1391,6 +2453,302 @@
   }
 
   /* ------------------------------------------------------------------------
+     Scenario actions
+     ------------------------------------------------------------------------ */
+
+  function startScenario(id) {
+    var scenario = RHEL.scenarios.find(id);
+    if (!scenario) return;
+    if (state.scenarioActive) {
+      var message = state.scenarioActive.id === id
+        ? 'Restart this incident? The sandbox and timer will reset.'
+        : 'Another incident is active. Loading this one resets the sandbox and abandons the current run. Continue?';
+      if (!window.confirm(message)) return;
+    }
+    try {
+      var sys = window.RHEL_SANDBOX.machine.create();
+      scenario.patch(sys);
+      window.RHEL_SANDBOX.loadState(sys, {
+        clearLog: true,
+        message: 'Broken Systems · ' + scenario.title + ' — live sandbox loaded.'
+      });
+    } catch (err) {
+      showToast('<strong>Could not load the scenario.</strong> The sandbox state is unchanged.');
+      return;
+    }
+    state.scenarioActive = { id: id, startedAt: Date.now(), hints: 0 };
+    saveState();
+    if (location.hash !== '#/scenarios/' + id) location.hash = '#/scenarios/' + id;
+    else renderRoute({ keepScroll: true });
+    showToast('<strong>Incident started.</strong> Read the story, work the evidence, and let the goal check decide when it is over.');
+  }
+
+  function revealScenarioHint(level) {
+    var scenario = activeScenario();
+    if (!scenario || !state.scenarioActive) return;
+    if (level !== state.scenarioActive.hints) return;
+    state.scenarioActive.hints = Math.min(3, level + 1);
+    saveState();
+    renderRoute({ keepScroll: true });
+  }
+
+  function completeScenario(scenario) {
+    if (!scenario || !state.scenarioActive || state.scenarioActive.id !== scenario.id) return;
+    var seconds = scenarioElapsed();
+    var hints = state.scenarioActive.hints;
+    var score = RHEL.scenarios.score(seconds, hints, scenario.timeTarget);
+    var previous = scenarioRun(scenario.id) || {};
+    var bestSeconds = previous.bestSeconds ? Math.min(previous.bestSeconds, seconds) : seconds;
+    state.scenarioRuns[scenario.id] = {
+      attempts: (previous.attempts || 0) + 1,
+      bestScore: Math.max(previous.bestScore || 0, score),
+      bestSeconds: bestSeconds,
+      lastScore: score,
+      lastSeconds: seconds,
+      lastHints: hints,
+      lastCompletedAt: new Date().toISOString()
+    };
+    state.scenarioActive = null;
+    saveState();
+    if (currentRoute.name === 'scenarios') renderRoute({ keepScroll: true });
+    showToast('<strong>Incident resolved.</strong> Score ' + score + '/100 in ' + formatDuration(seconds) + ' with ' + hints + ' hint' + (hints === 1 ? '' : 's') + '.');
+  }
+
+  function refreshScenarioCheck() {
+    if (!state.scenarioActive) return;
+    var scenario = activeScenario();
+    if (!scenario) return;
+    var met = scenarioGoalMet(scenario);
+    document.querySelectorAll('[data-scenario-goal]').forEach(function (el) {
+      el.classList.toggle('is-met', met);
+      var title = el.querySelector('strong');
+      var note = el.querySelector('small');
+      if (title) title.textContent = met ? 'Goal met' : 'Goal not met yet';
+      if (note) note.textContent = met ? 'The live check passes. Resolving the incident…' : 'The check runs against the sandbox state.';
+    });
+    document.querySelectorAll('[data-scenario-goal-text]').forEach(function (el) {
+      el.textContent = met ? 'PASS' : 'WAITING';
+      el.classList.toggle('is-met', met);
+    });
+    if (met) completeScenario(scenario);
+  }
+
+  function checkScenarioNow(id) {
+    var scenario = RHEL.scenarios.find(id);
+    if (!scenario || !state.scenarioActive || state.scenarioActive.id !== id) return;
+    if (scenarioGoalMet(scenario)) completeScenario(scenario);
+    else showToast('<strong>Goal not met yet.</strong> Read the evidence and change one thing at a time.');
+  }
+
+  /* ------------------------------------------------------------------------
+     Review actions
+     ------------------------------------------------------------------------ */
+
+  function startReviewSession(filter) {
+    if (state.review.active && !window.confirm('A review session is already in progress. Start a new one and discard its position?')) return;
+    var cards = getReviewCards().filter(function (card) {
+      if (filter === 'quiz') return card.kind === 'quiz';
+      if (filter === 'commands') return card.kind === 'command';
+      return true;
+    });
+    var now = Date.now();
+    var due = cards.filter(function (card) { return RHEL.review.isDueToday(state.review.items[card.id], now); });
+    var pool = due.length ? due : cards;
+    var queue = shuffleList(pool).slice(0, 20).map(function (card) { return card.id; });
+    if (!queue.length) {
+      showToast('<strong>No cards available.</strong> Try a different review filter.');
+      return;
+    }
+    state.review.active = {
+      queue: queue,
+      index: 0,
+      filter: filter || 'all',
+      startedAt: now,
+      correct: 0,
+      again: 0
+    };
+    reviewRevealed = false;
+    saveState();
+    if (location.hash !== '#/review/session') location.hash = '#/review/session';
+    else renderRoute();
+  }
+
+  function finalizeReviewSession() {
+    var active = state.review.active;
+    if (!active) return;
+    var summary = {
+      completedAt: new Date().toISOString(),
+      reviewed: active.queue.length,
+      correct: active.correct,
+      again: active.again,
+      filter: active.filter,
+      durationSeconds: Math.max(0, Math.round((Date.now() - active.startedAt) / 1000))
+    };
+    state.review.lastSession = summary;
+    state.review.history = (state.review.history || []).concat(summary).slice(-20);
+    state.review.active = null;
+    reviewRevealed = false;
+    saveState();
+  }
+
+  function gradeReviewCard(correct) {
+    var active = state.review.active;
+    if (!active) return;
+    var card = reviewCardById(active.queue[active.index]);
+    if (!card) return;
+    RHEL.review.grade(state.review.items, card.id, correct, Date.now());
+    if (correct) active.correct += 1;
+    else active.again += 1;
+    active.index += 1;
+    if (active.index >= active.queue.length) finalizeReviewSession();
+    else saveState();
+    reviewRevealed = false;
+    renderRoute({ keepScroll: true });
+  }
+
+  function revealReviewCard() {
+    reviewRevealed = true;
+    renderRoute({ keepScroll: true });
+  }
+
+  /* ------------------------------------------------------------------------
+     Exam actions
+     ------------------------------------------------------------------------ */
+
+  function startExam() {
+    if (state.exam.active && !window.confirm('An exam is already running. Start a new one and discard the current answers?')) return;
+    var refreshed = false;
+    if (examPracticalPassed()) {
+      try {
+        var fresh = window.RHEL_SANDBOX.machine.create();
+        window.RHEL_SANDBOX.loadState(fresh, {
+          clearLog: true,
+          message: 'Final exam · clean sandbox loaded for the practical task.'
+        });
+        refreshed = true;
+      } catch (err) { /* keep the current machine if reset is unavailable */ }
+    }
+    var picked = RHEL.exam.draw(RHEL.exam.config.questions);
+    var now = Date.now();
+    state.exam.active = {
+      id: 'exam-' + now,
+      questionIds: picked.map(function (item) { return item.id; }),
+      answers: {},
+      index: 0,
+      startedAt: now,
+      endsAt: now + (RHEL.exam.config.minutes * 60000)
+    };
+    saveState();
+    if (location.hash !== '#/exam') location.hash = '#/exam';
+    else renderRoute();
+    showToast(refreshed
+      ? '<strong>The clock is running.</strong> A clean sandbox seed was loaded for the practical task.'
+      : '<strong>The clock is running.</strong> ' + RHEL.exam.config.minutes + ' minutes, 30 questions, and one live practical task.');
+  }
+
+  function submitExam(auto) {
+    var active = state.exam.active;
+    if (!active) return;
+    var answered = examAnsweredCount();
+    var practicalPassed = examPracticalPassed();
+    if (!auto) {
+      var message = 'Submit the final exam? ' + (active.questionIds.length - answered) + ' question(s) are unanswered and the practical is ' + (practicalPassed ? 'passing' : 'not passing') + '.';
+      if (!window.confirm(message)) return;
+    }
+
+    var correct = 0;
+    var questionResults = [];
+    active.questionIds.forEach(function (id) {
+      var item = RHEL.exam.question(id);
+      if (!item) return;
+      var chosen = active.answers[id];
+      var isCorrect = chosen === item.question.answer;
+      if (isCorrect) correct += 1;
+      questionResults.push({ id: id, lesson: item.lesson, module: item.module, qi: item.qi, chosen: chosen === undefined ? null : chosen, correct: isCorrect });
+    });
+    var total = active.questionIds.length;
+    var score = Math.round(((correct + (practicalPassed ? 1 : 0)) / (total + 1)) * 100);
+    var result = {
+      id: active.id,
+      completedAt: new Date().toISOString(),
+      startedAt: active.startedAt,
+      durationSeconds: Math.max(0, Math.round((Date.now() - active.startedAt) / 1000)),
+      score: score,
+      correct: correct,
+      total: total,
+      practicalPassed: practicalPassed,
+      pass: score >= RHEL.exam.config.passScore && practicalPassed,
+      moduleStats: RHEL.exam.moduleStats(active.questionIds, active.answers),
+      questionResults: questionResults,
+      questionIds: active.questionIds.slice(),
+      answers: JSON.parse(JSON.stringify(active.answers))
+    };
+    state.exam.lastResult = result;
+    state.exam.history = [{
+      id: result.id,
+      completedAt: result.completedAt,
+      score: result.score,
+      correct: result.correct,
+      total: result.total,
+      practicalPassed: result.practicalPassed,
+      pass: result.pass,
+      durationSeconds: result.durationSeconds
+    }].concat(state.exam.history || []).slice(0, 10);
+    state.exam.active = null;
+    saveState();
+    if (auto) showToast('<strong>Time expired.</strong> The exam was submitted automatically.');
+    if (currentRoute.name === 'exam') {
+      if (location.hash !== '#/exam/result') location.hash = '#/exam/result';
+      else renderRoute();
+    } else {
+      showToast('<strong>Exam submitted.</strong> Open the result page from the final exam screen.');
+    }
+  }
+
+  function refreshExamPractical() {
+    if (!state.exam.active) return;
+    var passed = examPracticalPassed();
+    document.querySelectorAll('[data-exam-practical]').forEach(function (panel) {
+      panel.classList.toggle('is-met', passed);
+      var status = panel.querySelector('[data-exam-practical-status]');
+      if (status) {
+        status.classList.toggle('is-met', passed);
+        var title = status.querySelector('strong');
+        var note = status.querySelector('small');
+        if (title) title.textContent = passed ? 'Practical check passing' : 'Waiting for a passing check';
+        if (note) note.textContent = passed ? 'Your current sandbox state satisfies every condition.' : 'Open the terminal, complete the work, and the live check will update.';
+      }
+    });
+    document.querySelectorAll('.exam-nav-practical').forEach(function (item) {
+      item.classList.toggle('is-answered', passed);
+    });
+  }
+
+  function updateLiveClocks() {
+    if (state.scenarioActive) {
+      var scenarioClock = document.querySelector('[data-scenario-clock]');
+      if (scenarioClock) scenarioClock.textContent = formatClock(scenarioElapsed());
+    }
+    if (state.exam.active) {
+      var remaining = examRemaining();
+      document.querySelectorAll('[data-exam-clock]').forEach(function (clock) {
+        clock.textContent = formatClock(remaining);
+        var holder = clock.closest('.exam-clock');
+        if (holder) holder.classList.toggle('is-urgent', remaining <= 300);
+      });
+    }
+  }
+
+  var liveClock = null;
+  function startLiveClock() {
+    if (liveClock) return;
+    liveClock = window.setInterval(function () {
+      updateLiveClocks();
+      if (state.exam.active && examRemaining() <= 0) submitExam(true);
+    }, 1000);
+  }
+
+  /* ------------------------------------------------------------------------
      Filters
      ------------------------------------------------------------------------ */
 
@@ -1472,15 +2830,19 @@
       quiz: JSON.parse(JSON.stringify(state.quiz || {})),
       labsDone: state.labsDone.slice(),
       lastLesson: state.lastLesson || null,
-      lastVisit: state.lastVisit || null
+      lastVisit: state.lastVisit || null,
+      scenarioRuns: JSON.parse(JSON.stringify(state.scenarioRuns || {})),
+      scenarioActive: state.scenarioActive ? JSON.parse(JSON.stringify(state.scenarioActive)) : null,
+      review: JSON.parse(JSON.stringify(state.review || {})),
+      exam: JSON.parse(JSON.stringify(state.exam || {}))
     };
   }
 
   function exportProgress() {
     var payload = {
       app: 'RHEL Fieldbook',
-      schema: 2,
-      quizVersion: 2,
+      schema: 3,
+      quizVersion: 3,
       exportedAt: new Date().toISOString(),
       progress: progressSnapshot()
     };
@@ -1505,14 +2867,14 @@
     var progress = parsed;
     if (parsed.app !== undefined) {
       if (parsed.app !== 'RHEL Fieldbook') throw new Error('This is not a RHEL Fieldbook progress file.');
-      if (parsed.schema !== undefined && parsed.schema !== 1 && parsed.schema !== 2) {
+      if (parsed.schema !== undefined && parsed.schema !== 1 && parsed.schema !== 2 && parsed.schema !== 3) {
         throw new Error('Unsupported progress file version.');
       }
       progress = parsed.progress;
     }
     if (!isPlainObject(progress)) throw new Error('The progress payload is missing.');
 
-    var recognized = ['completedLessons', 'objectives', 'labSteps', 'quiz', 'labsDone', 'lastLesson', 'lastVisit'];
+    var recognized = ['completedLessons', 'objectives', 'labSteps', 'quiz', 'labsDone', 'lastLesson', 'lastVisit', 'scenarioRuns', 'scenarioActive', 'review', 'exam'];
     var hasProgress = recognized.some(function (key) { return progress[key] !== undefined; });
     if (!hasProgress) throw new Error('No progress fields were found in this file.');
 
@@ -1523,7 +2885,11 @@
       quiz: {},
       labsDone: [],
       lastLesson: null,
-      lastVisit: null
+      lastVisit: null,
+      scenarioRuns: {},
+      scenarioActive: null,
+      review: { version: 1, items: {}, active: null, lastSession: null, history: [] },
+      exam: { active: null, lastResult: null, history: [], learnerName: '' }
     };
 
     function lessonFor(id, label) {
@@ -1618,6 +2984,24 @@
       if (typeof progress.lastVisit !== 'string') throw new Error('lastVisit must be a string.');
       out.lastVisit = progress.lastVisit;
     }
+    if (progress.scenarioRuns !== undefined) {
+      if (!isPlainObject(progress.scenarioRuns)) throw new Error('scenarioRuns must be an object.');
+      Object.keys(progress.scenarioRuns).forEach(function (id) {
+        if (!RHEL.scenarios.find(id)) throw new Error('Unknown scenario id: ' + id + '.');
+        if (!isPlainObject(progress.scenarioRuns[id])) throw new Error('Scenario result for ' + id + ' must be an object.');
+        var run = normalizeScenarioRun(progress.scenarioRuns[id]);
+        if (!run) throw new Error('Scenario result for ' + id + ' is malformed.');
+        out.scenarioRuns[id] = run;
+      });
+    }
+    if (progress.scenarioActive !== undefined && progress.scenarioActive !== null) {
+      if (!isPlainObject(progress.scenarioActive) || !RHEL.scenarios.find(progress.scenarioActive.id)) {
+        throw new Error('scenarioActive must reference a known scenario.');
+      }
+      out.scenarioActive = JSON.parse(JSON.stringify(progress.scenarioActive));
+    }
+    if (progress.review !== undefined) out.review = normalizeReviewState(progress.review);
+    if (progress.exam !== undefined) out.exam = normalizeExamState(progress.exam);
     return out;
   }
 
@@ -1633,11 +3017,13 @@
         var parsed = JSON.parse(String(reader.result || ''));
         var imported = normalizeImportedProgress(parsed);
         if (!window.confirm('Replace your current progress with this import? This cannot be undone.')) return;
-        state = Object.assign({}, state, imported, { quizVersion: 2 });
+        state = Object.assign({}, state, imported, { quizVersion: 3 });
         saveState();
         commandCache = null;
+        reviewCardCache = null;
+        reviewRevealed = false;
         renderRoute();
-        showToast('<strong>Progress imported.</strong> ' + imported.completedLessons.length + ' lessons and ' + imported.labsDone.length + ' labs restored.');
+        showToast('<strong>Progress imported.</strong> ' + imported.completedLessons.length + ' lessons, ' + imported.labsDone.length + ' labs, and review history restored.');
       } catch (err) {
         showToast('<strong>Import failed.</strong> ' + esc(err.message || 'Invalid progress file.'));
       }
@@ -1653,11 +3039,14 @@
      ------------------------------------------------------------------------ */
 
   function resetProgress() {
-    if (!window.confirm('Reset all lesson, objective, and lab progress on this device? This cannot be undone.')) return;
+    if (!window.confirm('Reset all lesson, scenario, review, and exam progress on this device? Sandbox files are separate and stay put. This cannot be undone.')) return;
     var theme = state.theme;
-    state = Object.assign({}, DEFAULT_STATE, { theme: theme });
+    state = freshState();
+    state.theme = theme;
     saveState();
     commandCache = null;
+    reviewCardCache = null;
+    reviewRevealed = false;
     renderRoute();
     showToast('<strong>Progress reset.</strong> A clean fieldbook. Start with Lesson 01.');
   }
@@ -1757,10 +3146,24 @@
         haystack: [l.lab.title, l.lab.scenario, l.lab.steps.map(function (s) { return s.text; }).join(' ')].join(' ').toLowerCase()
       });
     });
+    RHEL.scenarios.forEach(function (scenario) {
+      paletteIndex.push({
+        type: 'Scenario',
+        icon: '2AM',
+        title: scenario.title,
+        subtitle: scenario.subtitle + ' · ' + Math.round(scenario.timeTarget / 60) + ' min target',
+        url: '#/scenarios/' + scenario.id,
+        haystack: [scenario.title, scenario.subtitle, scenario.story, 'broken systems incident scenario'].join(' ').toLowerCase()
+      });
+    });
     paletteIndex.push({ type: 'Page', icon: 'GO', title: 'Curriculum', subtitle: 'Level 01 · sixteen lessons', url: '#/learn', haystack: 'curriculum lessons foundations level 01' });
     paletteIndex.push({ type: 'Page', icon: 'GO', title: 'The full path', subtitle: 'Five levels, zero to production', url: '#/roadmap', haystack: 'roadmap path levels production rhcsa rhce rhca' });
     paletteIndex.push({ type: 'Page', icon: 'GO', title: 'Labs', subtitle: 'Hands-on practice', url: '#/labs', haystack: 'labs practice exercises' });
     paletteIndex.push({ type: 'Page', icon: 'GO', title: 'Command index', subtitle: 'Every command in Level 01', url: '#/commands', haystack: 'commands reference index' });
+    paletteIndex.push({ type: 'Page', icon: 'GO', title: 'Broken Systems', subtitle: 'Five live incidents in the sandbox', url: '#/scenarios', haystack: 'broken systems scenarios incidents troubleshooting 2am' });
+    paletteIndex.push({ type: 'Page', icon: 'REV', title: 'Spaced review', subtitle: 'Due quiz questions and command flashcards', url: '#/review', haystack: 'review spaced repetition leitner flashcards due today' });
+    paletteIndex.push({ type: 'Page', icon: 'EX', title: 'Level 01 final exam', subtitle: '30 timed questions and a practical task', url: '#/exam', haystack: 'exam final test certificate practical timed' });
+    paletteIndex.push({ type: 'Page', icon: 'MAP', title: 'Objective mastery', subtitle: '80 objectives with quiz and lab evidence', url: '#/mastery', haystack: 'mastery objectives evidence quiz lab progress' });
     paletteBuilt = true;
   }
 
@@ -1786,6 +3189,9 @@
         paletteIndex.find(function (i) { return i.url === '#/lesson/shell'; }),
         paletteIndex.find(function (i) { return i.url === '#/lesson/help'; }),
         paletteIndex.find(function (i) { return i.url === '#/learn'; }),
+        paletteIndex.find(function (i) { return i.url === '#/scenarios'; }),
+        paletteIndex.find(function (i) { return i.url === '#/review'; }),
+        paletteIndex.find(function (i) { return i.url === '#/exam'; }),
         paletteIndex.find(function (i) { return i.url === '#/roadmap'; })
       ].filter(Boolean);
     } else {
@@ -1948,6 +3354,90 @@
         resetProgress();
         return;
       }
+      var scenarioStart = e.target.closest('[data-scenario-start]');
+      if (scenarioStart) {
+        e.preventDefault();
+        startScenario(scenarioStart.getAttribute('data-scenario-start'));
+        return;
+      }
+      var scenarioHint = e.target.closest('[data-scenario-hint]');
+      if (scenarioHint) {
+        e.preventDefault();
+        revealScenarioHint(parseInt(scenarioHint.getAttribute('data-scenario-hint'), 10));
+        return;
+      }
+      var scenarioCheck = e.target.closest('[data-scenario-check]');
+      if (scenarioCheck) {
+        e.preventDefault();
+        checkScenarioNow(scenarioCheck.getAttribute('data-scenario-check'));
+        return;
+      }
+      var openSandboxBtn = e.target.closest('[data-open-sandbox]');
+      if (openSandboxBtn) {
+        e.preventDefault();
+        if (window.openSandbox) window.openSandbox();
+        return;
+      }
+      var startReview = e.target.closest('[data-start-review]');
+      if (startReview) {
+        e.preventDefault();
+        startReviewSession(startReview.getAttribute('data-start-review'));
+        return;
+      }
+      var reveal = e.target.closest('[data-review-reveal]');
+      if (reveal) {
+        e.preventDefault();
+        revealReviewCard();
+        return;
+      }
+      var grade = e.target.closest('[data-review-grade]');
+      if (grade) {
+        e.preventDefault();
+        gradeReviewCard(grade.getAttribute('data-review-grade') === 'good');
+        return;
+      }
+      var examStart = e.target.closest('[data-exam-start]');
+      if (examStart) {
+        e.preventDefault();
+        startExam();
+        return;
+      }
+      var examSubmit = e.target.closest('[data-exam-submit]');
+      if (examSubmit) {
+        e.preventDefault();
+        submitExam(false);
+        return;
+      }
+      var examNav = e.target.closest('[data-exam-index]');
+      if (examNav && state.exam.active) {
+        e.preventDefault();
+        state.exam.active.index = Math.max(0, Math.min(state.exam.active.questionIds.length, parseInt(examNav.getAttribute('data-exam-index'), 10) || 0));
+        saveState();
+        renderRoute({ keepScroll: true });
+        return;
+      }
+      var examGoto = e.target.closest('[data-exam-goto]');
+      if (examGoto && state.exam.active) {
+        e.preventDefault();
+        var move = examGoto.getAttribute('data-exam-goto') === 'next' ? 1 : -1;
+        state.exam.active.index = Math.max(0, Math.min(state.exam.active.questionIds.length, state.exam.active.index + move));
+        saveState();
+        renderRoute({ keepScroll: true });
+        return;
+      }
+      var practicalCheck = e.target.closest('[data-exam-check-practical]');
+      if (practicalCheck) {
+        e.preventDefault();
+        refreshExamPractical();
+        showToast(examPracticalPassed() ? '<strong>Practical passing.</strong> The live sandbox check is satisfied.' : '<strong>Not passing yet.</strong> Check the task conditions in the terminal.');
+        return;
+      }
+      var printCertificate = e.target.closest('[data-print-certificate]');
+      if (printCertificate) {
+        e.preventDefault();
+        window.print();
+        return;
+      }
       var paletteItem = e.target.closest('.palette-item');
       if (paletteItem) closePalette();
     });
@@ -1955,6 +3445,19 @@
     document.addEventListener('change', function (e) {
       if (e.target.matches('[data-objective]')) handleObjective(e.target);
       if (e.target.matches('[data-lab-step]')) handleLabStep(e.target);
+      if (e.target.matches('[data-exam-option]') && state.exam.active) {
+        var active = state.exam.active;
+        var qid = active.questionIds[active.index];
+        active.answers[qid] = parseInt(e.target.value, 10);
+        saveState();
+        document.querySelectorAll('[data-exam-option]').forEach(function (input) {
+          var label = input.closest('.exam-option');
+          if (label) label.classList.toggle('is-selected', input.checked);
+        });
+        var currentNav = document.querySelector('.exam-nav-item.is-current');
+        if (currentNav && currentNav.classList.contains('exam-nav-practical') === false) currentNav.classList.add('is-answered');
+        document.querySelectorAll('[data-exam-answered-count]').forEach(function (el) { el.textContent = examAnsweredCount(); });
+      }
       if (e.target.matches('[data-import-file]')) {
         var file = e.target.files && e.target.files[0];
         e.target.value = '';
@@ -1962,8 +3465,35 @@
       }
     });
 
+    document.addEventListener('input', function (e) {
+      if (e.target.matches('[data-cert-name]')) {
+        state.exam.learnerName = e.target.value.slice(0, 80);
+        saveState();
+        document.querySelectorAll('[data-cert-name-text]').forEach(function (el) {
+          el.textContent = state.exam.learnerName || 'Your name';
+        });
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (currentRoute.name !== 'review' || currentRoute.section !== 'session' || !state.review.active) return;
+      var tag = (document.activeElement && document.activeElement.tagName) || '';
+      if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].indexOf(tag) !== -1) return;
+      if (!reviewRevealed && (e.key === ' ' || e.key === 'Enter')) {
+        e.preventDefault();
+        revealReviewCard();
+      } else if (reviewRevealed && (e.key === '1' || e.key === '2')) {
+        e.preventDefault();
+        gradeReviewCard(e.key === '2');
+      }
+    });
+
     window.addEventListener('hashchange', function () { renderRoute(); });
-    document.addEventListener('rhel:sandbox-change', function () { refreshLabChecks(); });
+    document.addEventListener('rhel:sandbox-change', function () {
+      refreshLabChecks();
+      refreshScenarioCheck();
+      refreshExamPractical();
+    });
   }
 
   /* ------------------------------------------------------------------------
@@ -1974,6 +3504,7 @@
   setupHeader();
   setupPalette();
   setupEvents();
+  startLiveClock();
   history.scrollRestoration = 'manual';
   renderRoute();
 })();

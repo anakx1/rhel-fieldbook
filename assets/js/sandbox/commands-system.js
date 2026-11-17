@@ -910,6 +910,12 @@
     if (!url) return C.fail('curl: try \'curl --help\' for more information', 2);
     if (/localhost|127\.0\.0\.1/.test(url)) {
       if (!ctx.sys.services.httpd.active) return C.fail('curl: (7) Failed to connect to localhost port 80 after 0 ms: Couldn\'t connect to server', 7);
+      var docRoot = ctx.sys.fs['/var/www/html'];
+      var index = ctx.sys.fs['/var/www/html/index.html'];
+      if ((docRoot && docRoot.context !== 'httpd_sys_content_t') || (index && index.context !== 'httpd_sys_content_t')) {
+        if (args.indexOf('-I') !== -1) return C.ok('HTTP/1.1 403 Forbidden\r\nServer: Apache\r\nContent-Type: text/html; charset=iso-8859-1\r\n\r\n');
+        return C.ok('<!doctype html><html><head><title>403 Forbidden</title></head><body><h1>Forbidden</h1><p>You do not have permission to access this resource.</p></body></html>\n');
+      }
       var read = C.readFile(ctx, '/var/www/html/index.html');
       return C.ok(read.ok ? read.content : '');
     }

@@ -450,6 +450,15 @@
         if (!match) {
           if (script === 'p') { printed = true; return; }
           if (script === 'd') { changed = true; line = null; return; }
+          var deleteAddress = /^\/(.*)\/d$/.exec(script);
+          if (deleteAddress) {
+            try {
+              if (new RegExp(deleteAddress[1]).test(line)) {
+                changed = true;
+                line = null;
+              }
+            } catch (e) { /* invalid address */ }
+          }
           return;
         }
         var source = match[2];

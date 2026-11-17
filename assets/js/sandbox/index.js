@@ -245,6 +245,22 @@
     save();
   }
 
+  function loadState(nextSys, options) {
+    if (!nextSys) return null;
+    options = options || {};
+    sys = nextSys;
+    shell = Shell.create(sys);
+    Machine.save(sys);
+    if (options.clearLog) {
+      el.log.innerHTML = '';
+      if (options.message) append(options.message, 'out bright');
+      append('', 'out');
+    }
+    updatePrompt();
+    save();
+    return sys;
+  }
+
   root.openSandbox = openSandbox;
   root.closeSandbox = closeSandbox;
   root.tryInSandbox = function (command) {
@@ -256,6 +272,7 @@
     }, 180);
   };
 
+  SB.loadState = loadState;
   SB.getSystem = function () { return sys; };
   SB.getShell = function () { return shell; };
   SB.reset = resetSandbox;
