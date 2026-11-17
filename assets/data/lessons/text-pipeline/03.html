@@ -1,0 +1,9 @@
+<p>A report is evidence with a scope. Name the source, the filter, and the time window. Save the intermediate command if the report will be repeated.</p>
+<div class="code-label"><span>terminal · build and save a report</span></div>
+<pre><code>sudo grep -c "Failed password" /var/log/secure > /tmp/auth-count.txt
+awk -F: "$3 >= 1000 { print $1, $3 }" /etc/passwd > /tmp/local-users.txt
+wc -l /tmp/local-users.txt
+cat /tmp/auth-count.txt /tmp/local-users.txt</code></pre>
+<p>Quote command substitutions inside double quotes. Avoid parsing human-readable output when a tool offers a machine-readable format. When you must parse logs, anchor the pattern to the fields you actually trust and test it against a known line first.</p>
+<div class="callout warn"><div class="callout-title">-i is a real edit</div><p><code>sed -i</code> changes the file immediately. Back it up or write to a new file first, especially when the source is a configuration file that a service depends on.</p></div>
+<div class="callout note"><div class="callout-title">RHEL 9 vs RHEL 10</div><p>The GNU tools in this lesson are compatible across both releases. Portable options are the safer choice when the same script may run on RHEL 9 and 10; version-specific extensions belong behind a capability check.</p></div>

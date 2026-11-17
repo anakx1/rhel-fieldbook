@@ -159,6 +159,8 @@
   });
 
   reg('grep', function (ctx, args, stdin) {
+    ctx.sys.evidence = ctx.sys.evidence || {};
+    ctx.sys.evidence['text:grep'] = true;
     var opts = { ignoreCase: false, invert: false, number: false, count: false, recursive: false, extended: false, fixed: false, only: false };
     var pattern = null;
     var files = [];

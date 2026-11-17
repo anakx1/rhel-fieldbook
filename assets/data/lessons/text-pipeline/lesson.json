@@ -1,0 +1,182 @@
+{
+  "id": "text-pipeline",
+  "module": "m10",
+  "title": "find, grep, sed, and awk together",
+  "subtitle": "Stop reading files one at a time. Locate the right evidence, filter it, transform it, and leave a report another operator can use.",
+  "minutes": 42,
+  "difficulty": "Operator",
+  "tags": [
+    "find",
+    "grep",
+    "sed",
+    "awk",
+    "regex",
+    "text processing"
+  ],
+  "objectives": [
+    "Find files by name, type, and location without crossing unrelated trees",
+    "Search file contents recursively with grep and a safe pattern",
+    "Transform matching text with sed without rewriting the source",
+    "Select and reformat fields with awk",
+    "Produce a small evidence report through a pipeline"
+  ],
+  "ex200": [
+    {
+      "objective": 0,
+      "exam": "tools",
+      "evidence": "find with -type and -name on a bounded tree."
+    },
+    {
+      "objective": 1,
+      "exam": "tools",
+      "evidence": "grep -R and a fixed-string search."
+    },
+    {
+      "objective": 2,
+      "exam": "tools",
+      "evidence": "sed substitution and address selection."
+    },
+    {
+      "objective": 3,
+      "exam": "tools",
+      "evidence": "awk field extraction and condition."
+    },
+    {
+      "objective": 4,
+      "exam": "tools",
+      "evidence": "Pipeline writes a verified report file."
+    }
+  ],
+  "versionNotes": [
+    "RHEL 9 and RHEL 10 ship GNU findutils, grep, sed, and gawk with the same core behavior used here.",
+    "RHEL 10 may ship newer versions with additional options. Prefer portable POSIX options in scripts that must also run on RHEL 9."
+  ],
+  "sections": [
+    {
+      "title": "Find the evidence",
+      "file": "01.html"
+    },
+    {
+      "title": "Filter and transform",
+      "file": "02.html"
+    },
+    {
+      "title": "Write a report you can defend",
+      "file": "03.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "find /var/log -type f -name \"*.log\"",
+      "desc": "Find regular files with a .log suffix under one tree.",
+      "category": "Text"
+    },
+    {
+      "cmd": "find /etc -type f -name \"*.conf\" -newermt \"-7 days\"",
+      "desc": "Find configuration changed in the last week.",
+      "category": "Text"
+    },
+    {
+      "cmd": "sudo grep -R \"Failed password\" /var/log/secure",
+      "desc": "Search a file or directory recursively for a fixed phrase.",
+      "category": "Text"
+    },
+    {
+      "cmd": "grep -nE \"error|failed\" /var/log/messages",
+      "desc": "Search with line numbers and an extended regular expression.",
+      "category": "Text"
+    },
+    {
+      "cmd": "sed -n \"1,5p\" file",
+      "desc": "Print only the first five lines.",
+      "category": "Text"
+    },
+    {
+      "cmd": "sed \"s/old/new/g\" file",
+      "desc": "Print a substituted view without changing the file in place.",
+      "category": "Text"
+    },
+    {
+      "cmd": "awk -F: \"$3 >= 1000 { print $1, $3 }\" /etc/passwd",
+      "desc": "Select fields by a numeric condition.",
+      "category": "Text"
+    },
+    {
+      "cmd": "awk \"{ print $1 }\" access_log | sort | uniq -c | sort -rn | head",
+      "desc": "Count the most frequent first field.",
+      "category": "Text"
+    }
+  ],
+  "lab": {
+    "title": "From log noise to a short report",
+    "scenario": "Use the sandbox logs to find files, extract authentication failures, transform the unit name, and build two small reports under /tmp.",
+    "minutes": 28,
+    "steps": [
+      {
+        "text": "Find regular log files under /var/log without leaving that tree.",
+        "cmd": "find /var/log -type f -name \"*.log\"",
+        "verify": "The results are regular files under /var/log and include at least one .log file.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Search /var/log/secure for failed password attempts.",
+        "cmd": "sudo grep -R \"Failed password\" /var/log/secure",
+        "verify": "The output contains the failed-password lines with line numbers if -n is used.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create a transformed copy of the auth log with sshd replaced by auth.",
+        "cmd": "sudo sed \"s/sshd/[auth]/g\" /var/log/secure | tee /tmp/auth-report.txt && grep \"\\[auth\\]\" /tmp/auth-report.txt",
+        "verify": "The report exists and contains [auth] tags while the source file is unchanged.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Use awk to list local human users and their UIDs.",
+        "cmd": "awk -F: \"$3 >= 1000 { print $1, $3 }\" /etc/passwd > /tmp/local-users.txt && cat /tmp/local-users.txt",
+        "verify": "The report contains student and its UID, with no system accounts.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Build a short summary that another operator can read.",
+        "cmd": "printf \"auth failures: \" > /tmp/auth-summary.txt; sudo grep -c \"Failed password\" /var/log/secure >> /tmp/auth-summary.txt; printf \"local users: \" >> /tmp/auth-summary.txt; cat /tmp/local-users.txt | wc -l >> /tmp/auth-summary.txt",
+        "verify": "The summary contains both counts and is written under /tmp.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which find expression limits results to regular files named *.log?",
+      "options": [
+        "find /var/log -type f -name \"*.log\"",
+        "find /var/log -type d -name \"*.log\"",
+        "grep -R \"*.log\" /var/log",
+        "ls /var/log/*.log -type f"
+      ],
+      "answer": 0,
+      "why": "-type f selects regular files and -name matches the basename pattern."
+    },
+    {
+      "q": "What does sed \"s/old/new/g\" do by default?",
+      "options": [
+        "Edits the file in place",
+        "Prints a changed view to stdout without modifying the file",
+        "Deletes the file",
+        "Changes file permissions"
+      ],
+      "answer": 1,
+      "why": "sed writes to stdout unless -i is supplied; -i edits in place and should be used deliberately."
+    },
+    {
+      "q": "In awk -F: \"$3 >= 1000 { print $1 }\", what is $3?",
+      "options": [
+        "The third line",
+        "The third colon-separated field",
+        "The third file",
+        "The exit code"
+      ],
+      "answer": 1,
+      "why": "-F: sets the field separator, so $3 is the third field of each record."
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "id": "network",
+  "module": "m03",
+  "title": "Network without panic",
+  "subtitle": "Addresses, routes, ports, DNS, and a firewall you should not switch off.",
+  "minutes": 30,
+  "difficulty": "Core",
+  "tags": [
+    "network",
+    "ip",
+    "nmcli",
+    "ss",
+    "firewalld",
+    "DNS"
+  ],
+  "objectives": [
+    "Inspect interfaces, addresses, routes, and connection profiles",
+    "Configure a basic connection with nmcli",
+    "Find listening ports and the processes behind them",
+    "Test DNS and application-layer connectivity",
+    "Open a service in firewalld without disabling the firewall"
+  ],
+  "sections": [
+    {
+      "title": "The four facts of network triage",
+      "file": "01.html"
+    },
+    {
+      "title": "A safe nmcli change",
+      "file": "02.html"
+    },
+    {
+      "title": "Ports, DNS, and reachability",
+      "file": "03.html"
+    },
+    {
+      "title": "firewalld: open the door, keep the wall",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "ip addr",
+      "desc": "Show interfaces and assigned addresses.",
+      "category": "Network"
+    },
+    {
+      "cmd": "ip route",
+      "desc": "Show the routing table and default gateway.",
+      "category": "Network"
+    },
+    {
+      "cmd": "nmcli device status",
+      "desc": "Show network devices and connection state.",
+      "category": "Network"
+    },
+    {
+      "cmd": "nmcli connection show",
+      "desc": "List saved connection profiles.",
+      "category": "Network"
+    },
+    {
+      "cmd": "nmcli connection modify ...",
+      "desc": "Change a profile; apply with connection up.",
+      "category": "Network"
+    },
+    {
+      "cmd": "ss -tulpn",
+      "desc": "List listening TCP/UDP sockets with processes.",
+      "category": "Network"
+    },
+    {
+      "cmd": "getent hosts server",
+      "desc": "Resolve a name using the system name service.",
+      "category": "Network"
+    },
+    {
+      "cmd": "ping -c 3 host",
+      "desc": "Test ICMP reachability.",
+      "category": "Network"
+    },
+    {
+      "cmd": "curl -I http://host",
+      "desc": "Test an HTTP endpoint and show headers.",
+      "category": "Network"
+    },
+    {
+      "cmd": "firewall-cmd --list-all",
+      "desc": "Show the active firewalld zone and rules.",
+      "category": "Network"
+    },
+    {
+      "cmd": "sudo firewall-cmd --permanent --add-service=http",
+      "desc": "Persistently allow HTTP in the active zone.",
+      "category": "Network"
+    },
+    {
+      "cmd": "sudo firewall-cmd --reload",
+      "desc": "Apply persistent firewalld changes.",
+      "category": "Network"
+    }
+  ],
+  "lab": {
+    "title": "Read the network from the inside out",
+    "scenario": "A web service is unreachable from another host. Gather evidence layer by layer before changing anything.",
+    "minutes": 18,
+    "steps": [
+      {
+        "text": "Record interfaces, addresses, and default route.",
+        "cmd": "ip -br addr && ip route",
+        "verify": "Identify the interface with the default gateway."
+      },
+      {
+        "text": "Inspect NetworkManager device and connection state.",
+        "cmd": "nmcli device status && nmcli -f NAME,DEVICE,STATE connection show",
+        "verify": "nmcli should show ens3 connected and the active connection name."
+      },
+      {
+        "text": "Check whether a web server is listening and on which address.",
+        "cmd": "sudo ss -tlnp | grep -E \":(80|443)\\b\"",
+        "verify": "ss -tlnp should show a LISTEN socket on port 80 or 443 if a web server is running."
+      },
+      {
+        "text": "Test DNS resolution through the system resolver.",
+        "cmd": "getent hosts localhost",
+        "verify": "getent hosts localhost should resolve to 127.0.0.1 and ::1."
+      },
+      {
+        "text": "Inspect the firewall zone and list allowed services.",
+        "cmd": "sudo firewall-cmd --get-active-zones && sudo firewall-cmd --list-all",
+        "verify": "If http is missing, that is a candidate cause — but confirm the listener first."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which command shows listening TCP sockets with processes?",
+      "options": [
+        "ip route",
+        "ss -tlnp",
+        "nmcli device status",
+        "getent hosts"
+      ],
+      "answer": 1,
+      "why": "ss -tlnp filters TCP, listening, numeric, with process information. ip route shows the routing table."
+    },
+    {
+      "q": "A service is listening only on 127.0.0.1:8080. Can a remote host connect?",
+      "options": [
+        "Yes, loopback is public",
+        "No, loopback is local to the host",
+        "Only over IPv6",
+        "Only if firewalld is disabled"
+      ],
+      "answer": 1,
+      "why": "127.0.0.1 is the loopback address. A remote client cannot reach a socket bound only there."
+    },
+    {
+      "q": "What happens if you add a firewalld rule without --permanent?",
+      "options": [
+        "It is rejected",
+        "It applies at runtime but may disappear on reload or reboot",
+        "It permanently blocks all traffic",
+        "It restarts the network"
+      ],
+      "answer": 1,
+      "why": "Runtime changes are temporary. Use --permanent and reload to keep the rule."
+    }
+  ]
+}

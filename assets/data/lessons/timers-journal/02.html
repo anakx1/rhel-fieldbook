@@ -1,0 +1,21 @@
+<p>A timer does not contain the command. It triggers a unit, usually a service with the same base name. Keep the service responsible for doing the work and the timer responsible only for scheduling.</p>
+<div class="code-label"><span>/etc/systemd/system/fieldbook-backup.service</span></div>
+<pre><code>[Unit]
+Description=Fieldbook nightly backup
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fieldbook-backup</code></pre>
+<div class="code-label"><span>/etc/systemd/system/fieldbook-backup.timer</span></div>
+<pre><code>[Unit]
+Description=Run fieldbook backup nightly
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+Unit=fieldbook-backup.service
+
+[Install]
+WantedBy=timers.target</code></pre>
+<p><code>OnCalendar</code> accepts calendar expressions, not only intervals. <code>OnUnitActiveSec=1h</code> is a monotonic timer measured from the last activation; <code>OnCalendar</code> follows wall-clock time. Use <code>Persistent=true</code> for jobs that must catch up after downtime, and add <code>RandomizedDelaySec</code> when many hosts would otherwise hit the same service at once.</p>
+<div class="callout tip"><div class="callout-title">Install the right target</div><p>Timers install into <code>timers.target</code>, not <code>multi-user.target</code>. Enabling the timer creates the link; enabling only the service does not schedule anything.</p></div>

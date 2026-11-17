@@ -1,0 +1,15 @@
+<p>Before changing anything, establish the facts. Three files and one command tell you most of what you need to know about the platform.</p>
+        <div class="code-label"><span>terminal · identify the release</span></div>
+        <pre><code>cat /etc/redhat-release
+cat /etc/os-release
+uname -r
+hostnamectl</code></pre>
+        <p><code>/etc/redhat-release</code> is the short human-readable release string. <code>/etc/os-release</code> is the structured, script-friendly version used by tools across distributions. <code>uname -r</code> gives the running kernel; <code>hostnamectl</code> connects the hostname, operating system, kernel, architecture, and virtualization context in one view.</p>
+        <p>You will also use <code>dnf</code> constantly. Check which generation you have before relying on a manual page from the internet:</p>
+        <div class="code-label"><span>terminal · package manager generation</span></div>
+        <pre><code>dnf --version</code></pre>
+        <p>On RHEL 9 this reports DNF 4; on RHEL 10 it reports DNF5. Most everyday subcommands — <code>install</code>, <code>remove</code>, <code>search</code>, <code>info</code>, <code>repoquery</code> — remain familiar, but output and some flags are not identical.</p>
+        <div class="callout tip">
+          <div class="callout-title">A useful habit</div>
+          <p>Write down the release, kernel, and architecture before you open a support case. "It's broken" becomes actionable when you can say exactly which system is broken.</p>
+        </div>

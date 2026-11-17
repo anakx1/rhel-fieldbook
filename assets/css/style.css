@@ -2965,3 +2965,117 @@ body.sandbox-open .sandbox-toggle { opacity: 0; pointer-events: none; transform:
   .primary-nav { gap: 12px; }
   .primary-nav a { padding: 8px 6px; font-size: 12.5px; }
 }
+
+/* ==========================================================================
+   Level 02 · curriculum, certification map, diagrams, printable sheets
+   ========================================================================== */
+
+.module-level-chip { display: inline-block; margin-left: 6px; padding: 2px 5px; border: 1px solid var(--line); border-radius: 4px; color: var(--faint); font-family: var(--font-mono); font-size: 7px; font-weight: 400; letter-spacing: .08em; vertical-align: middle; }
+
+.level-curriculum { margin-top: 68px; }
+.level-curriculum:first-of-type { margin-top: 30px; }
+.level-curriculum-head { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(230px, .6fr); gap: 32px; align-items: end; padding-bottom: 20px; border-bottom: 2px solid var(--ink); }
+.level-curriculum-head .eyebrow { margin-bottom: 9px; }
+.level-curriculum-head h2 { margin: 0 0 9px; font-family: var(--font-display); font-size: clamp(38px, 5vw, 62px); font-weight: 400; letter-spacing: -.045em; line-height: .95; }
+.level-curriculum-head p { max-width: 700px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
+.level-curriculum-progress { display: grid; gap: 7px; text-align: right; }
+.level-curriculum-progress strong { font-family: var(--font-display); font-size: 30px; font-weight: 400; letter-spacing: -.03em; }
+.level-curriculum-progress span, .level-curriculum-progress small { color: var(--faint); font-family: var(--font-mono); font-size: 8px; letter-spacing: .06em; text-transform: uppercase; }
+.level-outcome-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 15px 0 8px; }
+.level-outcome-tags .topic-tag { font-size: 8px; }
+
+.version-notes { margin: 26px 0 30px; padding: 20px 23px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: var(--paper-raised); }
+.version-notes-head { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-bottom: 10px; }
+.version-notes-head h2 { margin: 0 0 0 5px; font-family: var(--font-display); font-size: 20px; font-weight: 400; letter-spacing: -.02em; }
+.version-badge { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 50%; background: var(--ink); color: var(--paper); font-family: var(--font-mono); font-size: 9px; }
+.version-arrow { color: var(--faint); font-size: 11px; }
+.version-notes ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 11.5px; line-height: 1.65; }
+.version-notes li + li { margin-top: 6px; }
+
+.ex200-map { margin: 30px 0 34px; padding: clamp(18px, 3vw, 28px); border: 1px solid var(--line); border-radius: 10px; background: var(--paper-sunk); }
+.ex200-map-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.ex200-map-head .eyebrow { margin-bottom: 4px; }
+.ex200-map-head h2 { margin: 0; font-family: var(--font-display); font-size: clamp(26px, 4vw, 36px); font-weight: 400; letter-spacing: -.03em; }
+.ex200-map > p { max-width: 760px; margin: 0 0 15px; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+.ex200-map table { min-width: 660px; font-size: 11px; }
+.ex200-map td { vertical-align: top; }
+.ex200-map td:nth-child(2) { color: var(--ink); }
+
+.diagram { margin: 26px 0 30px; padding: 15px 12px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper-raised); }
+.diagram svg { display: block; width: 100%; height: auto; max-height: 340px; }
+.diagram figcaption { margin-top: 8px; color: var(--faint); font-family: var(--font-mono); font-size: 8px; line-height: 1.55; text-align: center; }
+.diagram-box { fill: var(--paper-sunk); stroke: var(--line-strong); stroke-width: 1; }
+.diagram-fs { fill: color-mix(in srgb, var(--accent) 8%, var(--paper-sunk)); }
+.diagram-vg { fill: color-mix(in srgb, var(--accent) 5%, var(--paper-sunk)); }
+.diagram-lv { fill: color-mix(in srgb, var(--green, #3f6b45) 6%, var(--paper-sunk)); }
+.diagram-pv { fill: var(--paper); }
+.diagram-line { fill: none; stroke: var(--line-strong); stroke-width: 1.2; }
+.diagram-title { fill: var(--ink); font-family: var(--font-body); font-size: 12px; font-weight: 600; }
+.diagram-value { fill: var(--ink); font-family: var(--font-mono); font-size: 20px; }
+.diagram-label { fill: var(--faint); font-family: var(--font-mono); font-size: 8px; }
+
+.cheat-hero { border-bottom: 1px solid var(--line); }
+.cheat-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 9px; }
+.cheat-actions small { width: 100%; margin-top: 4px; color: var(--faint); font-family: var(--font-mono); font-size: 8px; letter-spacing: .04em; text-transform: uppercase; }
+.cheatsheet-shell { padding-block: 38px 90px; }
+.cheat-note { margin-bottom: 30px; padding: 13px 16px; border: 1px dashed var(--line-strong); border-radius: 7px; background: var(--paper-sunk); color: var(--muted); font-size: 10.5px; line-height: 1.6; }
+.cheat-level { margin-top: 46px; }
+.cheat-level-head { padding: 22px 0 18px; border-top: 3px solid var(--ink); }
+.cheat-level-head > span { color: var(--accent); font-family: var(--font-mono); font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+.cheat-level-head h1 { margin: 5px 0 6px; font-family: var(--font-display); font-size: clamp(38px, 6vw, 64px); font-weight: 400; letter-spacing: -.045em; line-height: .95; }
+.cheat-level-head p { max-width: 760px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.cheat-module { margin-top: 30px; }
+.cheat-module-head { padding: 13px 0 11px; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line); }
+.cheat-module-head > span { color: var(--faint); font-family: var(--font-mono); font-size: 7px; letter-spacing: .1em; text-transform: uppercase; }
+.cheat-module-head h2 { margin: 4px 0 4px; font-family: var(--font-display); font-size: 27px; font-weight: 400; letter-spacing: -.03em; }
+.cheat-module-head p { margin: 0; color: var(--muted); font-size: 10.5px; }
+.cheat-lesson { break-inside: avoid; margin-top: 18px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper-raised); }
+.cheat-lesson-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.cheat-number { color: var(--faint); font-family: var(--font-mono); font-size: 7px; letter-spacing: .1em; text-transform: uppercase; }
+.cheat-lesson-head h3 { margin: 2px 0 0; font-family: var(--font-display); font-size: 24px; font-weight: 400; letter-spacing: -.025em; }
+.cheat-meta { color: var(--faint); font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .05em; text-transform: uppercase; }
+.cheat-subtitle { margin: 5px 0 13px; color: var(--muted); font-size: 10.5px; line-height: 1.55; }
+.cheat-columns { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 24px; }
+.cheat-columns h4 { margin: 0 0 6px; color: var(--faint); font-family: var(--font-mono); font-size: 7px; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; }
+.cheat-columns h4:not(:first-child) { margin-top: 13px; }
+.cheat-objectives { margin: 0; padding-left: 15px; color: var(--muted); font-size: 9.5px; line-height: 1.55; }
+.cheat-lab { margin: 0; color: var(--muted); font-size: 9.5px; line-height: 1.55; }
+.cheat-lab strong { color: var(--ink); }
+.cheat-commands { width: 100%; border-collapse: collapse; font-size: 8.5px; }
+.cheat-commands td { padding: 5px 0; border-top: 1px solid var(--line); vertical-align: top; line-height: 1.45; }
+.cheat-commands td:first-child { width: 53%; padding-right: 12px; }
+.cheat-commands code { color: var(--ink); font-family: var(--font-mono); font-size: 8px; overflow-wrap: anywhere; }
+.cheat-commands td:last-child { color: var(--muted); }
+.cheat-version { margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--faint); font-size: 8.5px; line-height: 1.55; }
+.cheat-version strong { color: var(--accent); font-family: var(--font-mono); font-size: 7px; letter-spacing: .07em; text-transform: uppercase; }
+
+@media (max-width: 980px) {
+  .level-curriculum-head { grid-template-columns: 1fr; gap: 16px; align-items: start; }
+  .level-curriculum-progress { text-align: left; max-width: 330px; }
+  .cheat-columns { grid-template-columns: 1fr; gap: 12px; }
+}
+
+@media (max-width: 760px) {
+  .level-curriculum { margin-top: 46px; }
+  .cheat-lesson { padding: 15px 14px; }
+  .ex200-map { padding: 16px 14px; }
+  .version-notes { padding: 16px; }
+}
+
+@media print {
+  .view > *:not(.certificate-shell):not(.cheatsheet-shell) { display: none !important; }
+  .cheatsheet-shell { display: block !important; max-width: none !important; padding: 0 !important; }
+  .cheat-note { display: none !important; }
+  .cheat-level { margin-top: 0 !important; }
+  .cheat-level + .cheat-level { break-before: page; }
+  .cheat-level-head { padding-top: 0; }
+  .cheat-level-head h1 { font-size: 40px; }
+  .cheat-module { margin-top: 18px; }
+  .cheat-module-head { break-after: avoid; }
+  .cheat-lesson { break-inside: avoid; border-color: #bbb; background: #fff !important; color: #111 !important; }
+  .cheat-lesson-head h3, .cheat-lab strong, .cheat-commands code { color: #111 !important; }
+  .cheat-subtitle, .cheat-objectives, .cheat-lab, .cheat-commands td:last-child, .cheat-version { color: #333 !important; }
+  .cheat-commands td { border-top-color: #ddd; }
+  .cheat-version { border-top-color: #bbb; }
+  .version-notes, .ex200-map, .diagram { break-inside: avoid; }
+}

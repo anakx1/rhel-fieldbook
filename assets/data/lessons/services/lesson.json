@@ -1,0 +1,164 @@
+{
+  "id": "services",
+  "module": "m03",
+  "title": "Services and the journal",
+  "subtitle": "systemd is the operating system’s control plane. Learn to ask it what is true.",
+  "minutes": 27,
+  "difficulty": "Core",
+  "tags": [
+    "systemd",
+    "systemctl",
+    "journalctl",
+    "services",
+    "boot"
+  ],
+  "objectives": [
+    "Explain units, targets, and the difference between active and enabled",
+    "Start, stop, restart, enable, and mask services",
+    "Read service state and logs with systemctl and journalctl",
+    "Find failed units and investigate this boot",
+    "Understand when a daemon-reload is required"
+  ],
+  "sections": [
+    {
+      "title": "Units are the vocabulary",
+      "file": "01.html"
+    },
+    {
+      "title": "Start, enable, restart, mask",
+      "file": "02.html"
+    },
+    {
+      "title": "Journald: the first place to look",
+      "file": "03.html"
+    },
+    {
+      "title": "Boot targets and failed units",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "systemctl status sshd",
+      "desc": "Show service state, PID, and recent log lines.",
+      "category": "Services"
+    },
+    {
+      "cmd": "systemctl is-active sshd",
+      "desc": "Print whether the service is running now.",
+      "category": "Services"
+    },
+    {
+      "cmd": "systemctl is-enabled sshd",
+      "desc": "Print whether the service starts at boot.",
+      "category": "Services"
+    },
+    {
+      "cmd": "sudo systemctl enable --now httpd",
+      "desc": "Enable at boot and start immediately.",
+      "category": "Services"
+    },
+    {
+      "cmd": "sudo systemctl restart httpd",
+      "desc": "Restart a service. Disruptive.",
+      "category": "Services"
+    },
+    {
+      "cmd": "sudo systemctl daemon-reload",
+      "desc": "Reload unit definitions after editing them.",
+      "category": "Services"
+    },
+    {
+      "cmd": "systemctl --failed",
+      "desc": "List units that failed to start.",
+      "category": "Services"
+    },
+    {
+      "cmd": "journalctl -u sshd --since \"1 hour ago\"",
+      "desc": "Read recent logs for one unit.",
+      "category": "Services"
+    },
+    {
+      "cmd": "journalctl -p err -b -u sshd",
+      "desc": "Show error-priority messages for one service.",
+      "category": "Services"
+    },
+    {
+      "cmd": "systemctl get-default",
+      "desc": "Show the default boot target.",
+      "category": "Services"
+    }
+  ],
+  "lab": {
+    "title": "Investigate a service like an operator",
+    "scenario": "Answer the four questions: is it running, will it start at boot, what does it say, and what else failed?",
+    "minutes": 14,
+    "steps": [
+      {
+        "text": "Inspect SSH state and boot posture.",
+        "cmd": "systemctl status sshd && systemctl is-enabled sshd",
+        "verify": "Note active vs enabled separately.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Read the last 20 journal lines for SSH.",
+        "cmd": "journalctl -u sshd -n 20 --no-pager",
+        "verify": "The journal should show sshd startup or connection entries with no permission errors.",
+        "check": "sandbox"
+      },
+      {
+        "text": "List every failed unit on the system.",
+        "cmd": "systemctl --failed",
+        "verify": "An empty list is a valid and useful result.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Show the default boot target and running services.",
+        "cmd": "systemctl get-default && systemctl list-units --type=service --state=running | head",
+        "verify": "get-default should print a target such as multi-user.target, and running services should be listed.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Install a service package, enable it, verify it, then disable it.",
+        "cmd": "sudo dnf install -y httpd && sudo systemctl enable --now httpd && systemctl is-active httpd && sudo systemctl disable --now httpd",
+        "verify": "is-active should print active after enable --now, then inactive after disable --now.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "What is the difference between active and enabled?",
+      "options": [
+        "They are identical",
+        "Active means running now; enabled means starts at boot",
+        "Enabled means running now; active means installed",
+        "Active applies only to timers"
+      ],
+      "answer": 1,
+      "why": "A service can be running without being enabled, or enabled but currently stopped or failed."
+    },
+    {
+      "q": "Which command shows logs for a single systemd unit?",
+      "options": [
+        "journalctl -u sshd",
+        "systemctl logs sshd",
+        "tail -f sshd",
+        "dmesg -u sshd"
+      ],
+      "answer": 0,
+      "why": "journalctl -u filters the journal by unit. Add --since, -f, or -p for more control."
+    },
+    {
+      "q": "When must you run systemctl daemon-reload?",
+      "options": [
+        "After every service restart",
+        "After editing a unit file",
+        "After reading the journal",
+        "After installing any package"
+      ],
+      "answer": 1,
+      "why": "systemd caches unit definitions. daemon-reload makes it re-read unit files from disk."
+    }
+  ]
+}

@@ -1,0 +1,159 @@
+{
+  "id": "processes",
+  "module": "m03",
+  "title": "Processes, signals, jobs",
+  "subtitle": "See what is running, stop it politely, and understand what systemd already knows.",
+  "minutes": 26,
+  "difficulty": "Core",
+  "tags": [
+    "ps",
+    "top",
+    "signals",
+    "jobs",
+    "systemd"
+  ],
+  "objectives": [
+    "List and filter processes by user, name, and resource use",
+    "Interpret process states, parents, and load averages",
+    "Send the right signal with kill and pkill",
+    "Move work between foreground and background",
+    "Use systemd tools to see a service as a group of processes"
+  ],
+  "sections": [
+    {
+      "title": "A process is a running program",
+      "file": "01.html"
+    },
+    {
+      "title": "Signals: ask, then insist",
+      "file": "02.html"
+    },
+    {
+      "title": "Foreground, background, and the terminal",
+      "file": "03.html"
+    },
+    {
+      "title": "Resources and the systemd view",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "ps -ef",
+      "desc": "List every process with full command lines.",
+      "category": "Processes"
+    },
+    {
+      "cmd": "pgrep -a name",
+      "desc": "Find processes by name with arguments.",
+      "category": "Processes"
+    },
+    {
+      "cmd": "top",
+      "desc": "Live process and resource monitor.",
+      "category": "Processes"
+    },
+    {
+      "cmd": "free -h",
+      "desc": "Show memory and swap in human units.",
+      "category": "Processes"
+    },
+    {
+      "cmd": "vmstat 1 5",
+      "desc": "Sample system activity once per second, five times.",
+      "category": "Processes"
+    },
+    {
+      "cmd": "kill -TERM PID",
+      "desc": "Politely ask a process to terminate.",
+      "category": "Processes"
+    },
+    {
+      "cmd": "kill -9 PID",
+      "desc": "Force termination. Last resort.",
+      "category": "Processes"
+    },
+    {
+      "cmd": "pkill -u user name",
+      "desc": "Signal processes by owner and name.",
+      "category": "Processes"
+    },
+    {
+      "cmd": "jobs",
+      "desc": "List background jobs in the current shell.",
+      "category": "Processes"
+    },
+    {
+      "cmd": "systemd-cgtop",
+      "desc": "Show resource use by systemd cgroup.",
+      "category": "Processes"
+    }
+  ],
+  "lab": {
+    "title": "Practice polite termination",
+    "scenario": "Create a controlled process, inspect it, move it around, and stop it without resorting to SIGKILL.",
+    "minutes": 12,
+    "steps": [
+      {
+        "text": "Start a long sleep in the background.",
+        "cmd": "sleep 600 &amp;",
+        "verify": "The shell prints a job number and PID."
+      },
+      {
+        "text": "List jobs and locate the process independently.",
+        "cmd": "jobs && pgrep -a sleep",
+        "verify": "jobs shows the sleep job, and pgrep -a sleep shows the same PID and command."
+      },
+      {
+        "text": "Inspect the process parent and state.",
+        "cmd": "ps -o pid,ppid,stat,etime,cmd -p $(pgrep -n sleep)",
+        "verify": "ps should show the sleep process, its parent PID, and a sleeping state."
+      },
+      {
+        "text": "Send SIGTERM and confirm it exits.",
+        "cmd": "kill -TERM $(pgrep -n sleep) && jobs",
+        "verify": "After SIGTERM, the sleep process should disappear and jobs should no longer list it."
+      },
+      {
+        "text": "Check memory and load for context.",
+        "cmd": "free -h && uptime",
+        "verify": "free -h should report memory and swap, and uptime should report the load averages."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which signal should you try first to stop a service process?",
+      "options": [
+        "SIGKILL (9)",
+        "SIGTERM (15)",
+        "SIGSTOP (19)",
+        "SIGINT (2)"
+      ],
+      "answer": 1,
+      "why": "SIGTERM asks the process to terminate cleanly. SIGKILL cannot be caught and skips cleanup."
+    },
+    {
+      "q": "What does Ctrl+Z do to a foreground process?",
+      "options": [
+        "Kills it",
+        "Suspends it",
+        "Restarts it",
+        "Detaches it from systemd"
+      ],
+      "answer": 1,
+      "why": "Ctrl+Z sends SIGTSTP, suspending the job. Use bg to resume in the background or fg to return."
+    },
+    {
+      "q": "What does a high load average with low CPU usage often indicate?",
+      "options": [
+        "Too many idle processes",
+        "Processes blocked on I/O in D state",
+        "A DNS failure",
+        "The firewall is disabled"
+      ],
+      "answer": 1,
+      "why": "Linux load includes uninterruptible tasks. Storage stalls can push load up while CPU sits idle."
+    }
+  ]
+}

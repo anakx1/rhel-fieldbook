@@ -1,0 +1,148 @@
+{
+  "id": "help",
+  "module": "m01",
+  "title": "Ask the system",
+  "subtitle": "Manual pages, built-in help, and the search skills that replace guessing.",
+  "minutes": 20,
+  "difficulty": "Starter",
+  "tags": [
+    "man",
+    "documentation",
+    "rpm",
+    "troubleshooting"
+  ],
+  "objectives": [
+    "Navigate a man page and interpret its synopsis",
+    "Choose the right manual section for a command or file format",
+    "Search manual pages by keyword",
+    "Find the package that owns a command",
+    "Read local documentation when the network is unavailable"
+  ],
+  "sections": [
+    {
+      "title": "The manual is part of the system",
+      "file": "01.html"
+    },
+    {
+      "title": "Anatomy of a useful man page",
+      "file": "02.html"
+    },
+    {
+      "title": "Fast answers: built-in help and local docs",
+      "file": "03.html"
+    },
+    {
+      "title": "Find the right page and the owning package",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "man ls",
+      "desc": "Open the manual page for the ls command.",
+      "category": "Help"
+    },
+    {
+      "cmd": "man 5 passwd",
+      "desc": "Read the passwd file format, not the command.",
+      "category": "Help"
+    },
+    {
+      "cmd": "man -k password",
+      "desc": "Search manual page descriptions by keyword.",
+      "category": "Help"
+    },
+    {
+      "cmd": "whatis passwd",
+      "desc": "Show the one-line description of a manual page.",
+      "category": "Help"
+    },
+    {
+      "cmd": "ls --help",
+      "desc": "Print a compact usage summary.",
+      "category": "Help"
+    },
+    {
+      "cmd": "help cd",
+      "desc": "Read Bash builtin documentation.",
+      "category": "Help"
+    },
+    {
+      "cmd": "rpm -qf /usr/sbin/sshd",
+      "desc": "Find which package owns a file.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "dnf provides */sshd",
+      "desc": "Find a package that supplies a file or command.",
+      "category": "Packages"
+    }
+  ],
+  "lab": {
+    "title": "Answer three questions without a browser",
+    "scenario": "Use only the terminal. The goal is not to memorize flags; it is to build the reflex to look them up.",
+    "minutes": 12,
+    "steps": [
+      {
+        "text": "Read the synopsis of cp and find the option that preserves timestamps and mode.",
+        "cmd": "man cp",
+        "verify": "Look for -p, --preserve. The synopsis should make sense now."
+      },
+      {
+        "text": "Read the fstab file-format page and find the sixth field.",
+        "cmd": "man 5 fstab",
+        "verify": "The sixth field controls fsck pass order; root is usually 1, others 2 or 0."
+      },
+      {
+        "text": "Search manual descriptions for the word \"quota\".",
+        "cmd": "man -k quota",
+        "verify": "You should see several administration and file-format pages."
+      },
+      {
+        "text": "Find out which installed package owns sshd.",
+        "cmd": "command -v sshd && rpm -qf \"$(command -v sshd)\"",
+        "verify": "command -v sshd should print a path such as /usr/sbin/sshd, and rpm -qf should name openssh-server."
+      },
+      {
+        "text": "Locate the local documentation directory for a package you have installed.",
+        "cmd": "ls /usr/share/doc | head",
+        "verify": "The directory should exist under /usr/share/doc and contain the package documentation."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which command reads the file format of /etc/passwd rather than the passwd command?",
+      "options": [
+        "man passwd",
+        "man 5 passwd",
+        "passwd --help",
+        "cat --manual passwd"
+      ],
+      "answer": 1,
+      "why": "Section 5 contains file formats. man 5 passwd describes the colon-separated passwd file."
+    },
+    {
+      "q": "What does man -k do?",
+      "options": [
+        "Deletes a manual page",
+        "Searches manual page descriptions by keyword",
+        "Lists installed kernels",
+        "Opens the last manual page"
+      ],
+      "answer": 1,
+      "why": "man -k (apropos) searches the whatis index by keyword. The index must exist for results to appear."
+    },
+    {
+      "q": "How do you find the installed package that owns /usr/bin/ls?",
+      "options": [
+        "dnf remove /usr/bin/ls",
+        "rpm -qf /usr/bin/ls",
+        "chmod +x /usr/bin/ls",
+        "systemctl status /usr/bin/ls"
+      ],
+      "answer": 1,
+      "why": "rpm -qf queries the RPM database for the owning package. dnf provides is for packages that are available but not necessarily installed."
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+<p>firewalld filters traffic by zone. A zone is a policy bucket attached to interfaces or sources. Runtime rules are active now; permanent rules are saved and become active after <code>--reload</code> or a restart.</p>
+<div class="code-label"><span>terminal · inspect and open</span></div>
+<pre><code>firewall-cmd --get-active-zones
+firewall-cmd --list-all
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-port=8443/tcp
+sudo firewall-cmd --reload
+firewall-cmd --list-all</code></pre>
+<div class="table-wrap"><table><thead><tr><th>Scope</th><th>Lives in</th><th>Activation</th></tr></thead><tbody>
+<tr><td>Runtime</td><td>Running firewalld</td><td>Immediate, lost on reload/reboot unless also permanent</td></tr>
+<tr><td>Permanent</td><td>/etc/firewalld</td><td><code>firewall-cmd --reload</code> or restart</td></tr>
+</tbody></table></div>
+<p>Prefer services over raw ports when firewalld knows the service. A service definition carries every required port and helper. Use ports when the application is not packaged with a service definition or the port is genuinely custom.</p>
+<div class="callout note"><div class="callout-title">RHEL 9 vs RHEL 10</div><p>firewall-cmd is stable across both releases. RHEL 10's nftables backend means old iptables inspection habits may mislead you. Use <code>firewall-cmd</code> for policy and <code>nft list ruleset</code> when you need the kernel's actual rule set.</p></div>

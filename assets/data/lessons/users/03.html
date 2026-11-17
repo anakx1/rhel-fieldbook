@@ -1,0 +1,15 @@
+<p><code>su</code> switches user identity and normally requires the target user's password. <code>sudo</code> runs one command as another user according to a policy, normally authenticating with your own password. sudo is auditable, granular, and the correct default on RHEL.</p>
+        <p>On RHEL, members of the <code>wheel</code> group are typically granted full sudo access by the default configuration. Check before changing anything:</p>
+        <div class="code-label"><span>terminal · inspect sudo rights</span></div>
+        <pre><code>sudo -l
+getent group wheel</code></pre>
+        <p>Never edit <code>/etc/sudoers</code> directly with a normal editor. A syntax error can lock everyone out of privilege escalation. Use <code>visudo</code>, which validates the file before saving, or add a drop-in file under <code>/etc/sudoers.d/</code> with mode <code>0440</code>.</p>
+        <div class="code-label"><span>example sudoers drop-in</span></div>
+        <pre><code># /etc/sudoers.d/analyst
+analyst ALL=(ALL) ALL
+%engineering ALL=(ALL) /usr/bin/systemctl restart httpd</code></pre>
+        <p>The first rule grants full sudo. The second grants only one command to a group. Least privilege is not about refusing to grant access; it is about granting the smallest access that does the job.</p>
+        <div class="callout tip">
+          <div class="callout-title">Audit trail</div>
+          <p>sudo logs invocations. When something changes unexpectedly, "who ran what" is often answerable from the journal and sudo logs. Shared root passwords destroy that trail.</p>
+        </div>

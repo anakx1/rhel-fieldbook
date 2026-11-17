@@ -1,0 +1,13 @@
+<p>Under pressure, the temptation is to try the last thing that worked on a different system. Resist it. A short method keeps you from turning one problem into three.</p>
+        <ol>
+          <li><strong>Define the symptom</strong> — what is broken, for whom, and since when? "The site is down" is not a symptom. "HTTP 502 from the load balancer since 09:12 for all users" is.</li>
+          <li><strong>Establish scope</strong> — one host or many? One service or the whole platform? One network or every network?</li>
+          <li><strong>Find the timeline</strong> — what changed just before? Package update, config change, certificate expiry, DNS change, disk growth, deploy.</li>
+          <li><strong>Collect evidence</strong> — logs, status, capacity, network, process state. Preserve before you restart.</li>
+          <li><strong>Form one hypothesis</strong> — the smallest explanation that fits the evidence.</li>
+          <li><strong>Test one change</strong> — then observe. If it did not help, revert before trying the next thing.</li>
+        </ol>
+        <div class="callout warn">
+          <div class="callout-title">Restarting destroys evidence</div>
+          <p>A restart may restore service, but it also clears the state that explains the failure. Capture <code>systemctl status</code>, logs, and resource state first whenever it is safe to do so.</p>
+        </div>

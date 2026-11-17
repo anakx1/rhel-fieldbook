@@ -24,6 +24,7 @@ function load(relative) {
   'assets/js/sandbox/commands-fs.js',
   'assets/js/sandbox/commands-identity.js',
   'assets/js/sandbox/commands-system.js',
+  'assets/js/sandbox/commands-ops.js',
   'assets/js/sandbox/shell.js'
 ].forEach(load);
 

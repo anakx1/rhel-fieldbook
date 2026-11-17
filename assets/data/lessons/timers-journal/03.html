@@ -1,0 +1,10 @@
+<p>The journal is the first place to look when a unit fails. Filters make it readable: by unit, by boot, by time, by priority, and by output format.</p>
+<div class="code-label"><span>terminal · journal filters</span></div>
+<pre><code>journalctl -u sshd -n 50 --no-pager
+journalctl -u fieldbook-backup.service --since today --no-pager
+journalctl -p warning --since "1 hour ago" --no-pager
+journalctl -b -1 --no-pager
+journalctl --disk-usage</code></pre>
+<p><code>-b</code> selects a boot, <code>-p</code> filters by syslog priority, and <code>--since</code> bounds time. A quiet journal is not always good news: the unit may never have started. Check <code>systemctl status</code> and the timer's last trigger before concluding that the job succeeded.</p>
+<div class="callout warn"><div class="callout-title">Do not vacuum blindly</div><p><code>journalctl --vacuum-size</code> discards evidence. Confirm retention requirements and investigate a filling filesystem before deleting history.</p></div>
+<div class="callout note"><div class="callout-title">RHEL 9 vs RHEL 10</div><p>The timer and journal commands are compatible. Newer systemd releases may add calendar syntax and directives; validate a unit on the oldest release you support before rolling it out everywhere.</p></div>

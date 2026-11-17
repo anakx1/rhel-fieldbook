@@ -92,6 +92,13 @@
     fs['/etc/sudoers.d'] = dir(488, 0, 0, 'etc_t');
     fs['/etc/selinux'] = dir(493, 0, 0, 'etc_t');
     fs['/etc/selinux/config'] = file('SELINUX=enforcing\nSELINUXTYPE=targeted\n', 420, 0, 0, 'etc_t');
+    fs['/etc/yum.repos.d'] = dir(493, 0, 0, 'etc_t');
+    fs['/etc/yum.repos.d/redhat.repo'] = file('[baseos]\nname=RHEL 9 BaseOS\nbaseurl=https://cdn.redhat.com/content/dist/rhel9/$releasever/$basearch/baseos/os\nenabled=1\ngpgcheck=1\n\n[appstream]\nname=RHEL 9 AppStream\nbaseurl=https://cdn.redhat.com/content/dist/rhel9/$releasever/$basearch/appstream/os\nenabled=1\ngpgcheck=1\n', 420, 0, 0, 'etc_t');
+    fs['/etc/systemd'] = dir(493, 0, 0, 'etc_t');
+    fs['/etc/systemd/system'] = dir(493, 0, 0, 'etc_t');
+    fs['/etc/cron.d'] = dir(493, 0, 0, 'etc_t');
+    fs['/usr/local'] = dir(493, 0, 0, 'usr_t');
+    fs['/usr/local/bin'] = dir(493, 0, 0, 'usr_t');
     fs['/etc/motd'] = file('RHEL Fieldbook simulated lab system.\n', 420, 0, 0, 'etc_t');
 
     fs['/home'] = dir(493, 0, 0, 'home_root_t');
@@ -110,6 +117,7 @@
     fs['/var/log'] = dir(493, 0, 0, 'var_log_t');
     fs['/var/log/messages'] = file('Nov 14 09:01:12 rhel-lab systemd[1]: Starting dnf makecache...\nNov 14 09:01:14 rhel-lab systemd[1]: dnf-makecache.service: Deactivated successfully.\nNov 14 09:01:14 rhel-lab systemd[1]: Finished dnf makecache.\nNov 14 09:12:03 rhel-lab NetworkManager[810]: <info> device (ens3): state change: activated -> activated\nNov 14 09:14:22 rhel-lab httpd[1842]: [error] AH00027: No authentication done but request not allowed for /secure\nNov 14 09:18:44 rhel-lab sshd[2011]: Failed password for invalid user admin from 203.0.113.44 port 51022 ssh2\nNov 14 09:20:01 rhel-lab systemd[1]: Started Session 4 of User student.\nNov 14 09:25:40 rhel-lab kernel: XFS (dm-0): Mounting V5 Filesystem\n', 420, 0, 0, 'var_log_t');
     fs['/var/log/secure'] = file('Nov 14 09:17:10 rhel-lab sshd[2009]: Accepted publickey for student from 192.0.2.10 port 44112 ssh2\nNov 14 09:18:44 rhel-lab sshd[2011]: Failed password for invalid user admin from 203.0.113.44 port 51022 ssh2\nNov 14 09:18:46 rhel-lab sshd[2011]: Connection closed by invalid user admin 203.0.113.44 port 51022 [preauth]\nNov 14 09:22:30 rhel-lab sudo[2102]: student : TTY=pts/0 ; PWD=/home/student ; USER=root ; COMMAND=/bin/systemctl status httpd\n', 384, 0, 0, 'var_log_t');
+    fs['/var/log/fieldbook.log'] = file('Nov 14 09:30:01 rhel-lab fieldbook[1]: health check started\nNov 14 09:30:02 rhel-lab fieldbook[1]: disk usage ok\nNov 14 09:30:02 rhel-lab fieldbook[1]: completed\n', 420, 0, 0, 'var_log_t');
     fs['/var/log/httpd'] = dir(493, 0, 0, 'httpd_log_t');
     fs['/var/log/httpd/access_log'] = file('127.0.0.1 - - [14/Nov/2026:09:14:22 +0000] "GET / HTTP/1.1" 200 21\n', 420, 0, 0, 'httpd_log_t');
     fs['/var/log/httpd/error_log'] = file('[Sat Nov 14 09:14:22.000000 2026] [core:error] [pid 1842] [client 127.0.0.1:51234] AH00027: No authentication done but request not allowed for /secure\n', 420, 0, 0, 'httpd_log_t');
@@ -143,6 +151,8 @@
     fs['/dev/sda'] = special('block', 432, 0, 6, 'fixed_disk_device_t');
     fs['/dev/sda1'] = special('block', 432, 0, 6, 'fixed_disk_device_t');
     fs['/dev/sda2'] = special('block', 432, 0, 6, 'fixed_disk_device_t');
+    fs['/dev/sdb'] = special('block', 432, 0, 6, 'fixed_disk_device_t');
+    fs['/dev/sdc'] = special('block', 432, 0, 6, 'fixed_disk_device_t');
     fs['/dev/mapper'] = dir(493, 0, 0, 'device_t');
     fs['/dev/mapper/rhel-root'] = special('block', 432, 0, 6, 'fixed_disk_device_t');
     fs['/dev/mapper/rhel-data'] = special('block', 432, 0, 6, 'fixed_disk_device_t');
@@ -171,6 +181,7 @@
       pkgDef('dnf', '4.14.0', '9.el9', 'noarch', 'Package manager', ['/usr/bin/dnf']),
       pkgDef('systemd', '252', '32.el9', 'x86_64', 'System and Service Manager', ['/usr/bin/systemctl', '/usr/lib/systemd/systemd']),
       pkgDef('chrony', '4.3', '1.el9', 'x86_64', 'NTP client/server', ['/usr/sbin/chronyd']),
+      pkgDef('cronie', '1.5.7', '8.el9', 'x86_64', 'Cron daemon and crontab', ['/usr/sbin/crond', '/usr/bin/crontab']),
       pkgDef('NetworkManager', '1.44.2', '1.el9', 'x86_64', 'Network connection manager', ['/usr/sbin/NetworkManager']),
       pkgDef('curl', '7.76.1', '26.el9', 'x86_64', 'Command line tool for transferring data', ['/usr/bin/curl']),
       pkgDef('tar', '1.34', '6.el9', 'x86_64', 'GNU file archiver', ['/usr/bin/tar']),
@@ -212,6 +223,8 @@
         { name: 'sda1', size: '1G', type: 'part', fstype: 'xfs', mountpoint: '/boot', uuid: '1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d' },
         { name: 'sda2', size: '59G', type: 'part', fstype: 'LVM2_member', mountpoint: '', uuid: '' }
       ] },
+      { name: 'sdb', size: '20G', type: 'disk', fstype: '', mountpoint: '', uuid: '', children: [] },
+      { name: 'sdc', size: '10G', type: 'disk', fstype: '', mountpoint: '', uuid: '', children: [] },
       { name: 'rhel-root', size: '50G', type: 'lvm', fstype: 'xfs', mountpoint: '/', uuid: '7f4a1c2e-9d31-4e5a-b8c6-2f9d0a1b3c4d' },
       { name: 'rhel-data', size: '20G', type: 'lvm', fstype: 'xfs', mountpoint: '/data', uuid: '9e8d7c6b-5a4f-3e2d-1c0b-0a9f8e7d6c5b' }
     ];
@@ -283,6 +296,9 @@
         stat: '/usr/bin/stat', sudo: '/usr/bin/sudo', systemctl: '/usr/bin/systemctl',
         tail: '/usr/bin/tail', tar: '/usr/bin/tar', tee: '/usr/bin/tee', touch: '/usr/bin/touch',
         umount: '/usr/bin/umount', uname: '/usr/bin/uname', wc: '/usr/bin/wc',
+        parted: '/usr/sbin/parted', pvcreate: '/usr/sbin/pvcreate', vgcreate: '/usr/sbin/vgcreate',
+        lvcreate: '/usr/sbin/lvcreate', mkswap: '/usr/sbin/mkswap', swapon: '/usr/sbin/swapon',
+        swapoff: '/usr/sbin/swapoff', crontab: '/usr/bin/crontab', 'systemd-analyze': '/usr/bin/systemd-analyze',
         getenforce: '/usr/sbin/getenforce', getsebool: '/usr/sbin/getsebool', restorecon: '/usr/sbin/restorecon',
         semanage: '/usr/sbin/semanage', setsebool: '/usr/sbin/setsebool', sshd: '/usr/sbin/sshd'
       },
@@ -302,6 +318,12 @@
         interfaces: ['ens3'],
         runtime: { services: ['cockpit', 'dhcpv6-client', 'ssh'], ports: ['8080/tcp'] },
         permanent: { services: ['cockpit', 'dhcpv6-client', 'ssh'], ports: ['8080/tcp'] }
+      },
+      network: {
+        connections: {
+          'Wired connection 1': { name: 'Wired connection 1', device: 'ens3', method: 'auto', addresses: '192.0.2.50/24', gateway: '192.0.2.1', dns: '192.0.2.53', active: true }
+        },
+        routes: ['default via 192.0.2.1 dev ens3 proto static metric 100', '192.0.2.0/24 dev ens3 proto kernel scope link src 192.0.2.50']
       },
       selinux: {
         mode: 'enforcing',
@@ -327,6 +349,10 @@
       },
       processes: seedProcesses(),
       journal: seedJournal(),
+      timers: {},
+      swaps: [],
+      crontab: '',
+      dnfModules: {},
       loopNext: 0,
       umask: 18,
       lastExit: 0,

@@ -1,0 +1,9 @@
+<p>Most RHEL systems you administer will not have a monitor. You will reach them over <strong>SSH</strong> (Secure Shell), usually on TCP port 22.</p>
+        <div class="code-label"><span>terminal · connect to a host</span></div>
+        <pre><code>ssh student@server.example.com</code></pre>
+        <p>The first connection asks you to verify the server's host key fingerprint. In a managed environment, compare it with the value published by your team. Accepting an unknown key blindly is a security decision, not a formality.</p>
+        <p>Once connected, your local keyboard drives a shell on the remote machine. Everything you type runs there, not on your laptop. <code>exit</code> or <code>logout</code> ends the session. If a session freezes, press Enter, then <code>~.</code> (tilde followed by a period) at the start of a line to terminate the SSH client.</p>
+        <div class="callout tip">
+          <div class="callout-title">Know where you are</div>
+          <p>Before running a destructive command over SSH, run <code>hostname</code> and <code>pwd</code>. Muscle memory from one host becomes a production incident on another.</p>
+        </div>

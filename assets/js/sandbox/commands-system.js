@@ -82,6 +82,72 @@
     return '     Active: ' + active + ' since Sat 2026-11-14 09:00:00 UTC; 2 days ago';
   }
 
+  function iniValue(content, section, key) {
+    var current = '';
+    var lines = String(content || '').split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      var sec = /^\[(.+)\]$/.exec(line);
+      if (sec) { current = sec[1]; continue; }
+      if (current !== section) continue;
+      var match = new RegExp('^' + key + '\\s*=\\s*(.+)$').exec(line);
+      if (match) return match[1].trim();
+    }
+    return null;
+  }
+
+  function hydrateUnits(sys) {
+    sys.timers = sys.timers || {};
+    Object.keys(sys.fs || {}).forEach(function (path) {
+      var file = sys.fs[path];
+      if (!file || file.type !== 'file') return;
+      var match = /^\/etc\/systemd\/system\/([^/]+)\.service$/.exec(path);
+      if (match) {
+        var name = match[1];
+        if (!sys.services[name]) {
+          sys.services[name] = {
+            name: name,
+            description: iniValue(file.content, 'Unit', 'Description') || name,
+            active: false,
+            enabled: false,
+            state: 'dead',
+            pid: null,
+            package: null,
+            generated: true
+          };
+        }
+        return;
+      }
+      var timerMatch = /^\/etc\/systemd\/system\/([^/]+)\.timer$/.exec(path);
+      if (!timerMatch) return;
+      var timerName = timerMatch[1];
+      var timer = sys.timers[timerName] || { name: timerName, enabled: false, active: false, last: 'n/a', next: 'n/a' };
+      timer.unit = iniValue(file.content, 'Timer', 'Unit') || (timerName + '.service');
+      timer.calendar = iniValue(file.content, 'Timer', 'OnCalendar') || iniValue(file.content, 'Timer', 'OnUnitActiveSec') || 'n/a';
+      timer.persistent = /Persistent\s*=\s*true/i.test(file.content || '');
+      sys.timers[timerName] = timer;
+    });
+  }
+
+  function timerTarget(values) {
+    var raw = values[0] || '';
+    return raw.replace(/\.timer$/, '');
+  }
+
+  function timerStatus(sys, name, target) {
+    var timer = sys.timers[name];
+    var lines = [
+      '● ' + name + '.timer - ' + (timer.calendar === 'n/a' ? 'Timer' : timer.calendar),
+      '     Loaded: loaded (/etc/systemd/system/' + name + '.timer; ' + (timer.enabled ? 'enabled' : 'disabled') + '; preset: disabled)',
+      '     Active: ' + (timer.active ? 'active (waiting)' : 'inactive (dead)'),
+      '    Trigger: ' + timer.calendar + (timer.persistent ? ' (persistent)' : ''),
+      '   Triggers: ● ' + (timer.unit || name + '.service'),
+      '     Unit: ' + (timer.unit || name + '.service')
+    ];
+    sys.evidence['services:status:' + name] = true;
+    return C.ok(lines.join('\n') + '\n', timer.active ? 0 : 3);
+  }
+
   function systemctl(ctx, args) {
     var now = false;
     var noPager = false;
@@ -102,9 +168,12 @@
       else values.push(arg);
     }
     var command = values.shift();
-    var target = serviceName(values[0]);
+    var rawTarget = values[0] || '';
+    var isTimer = /\.timer$/.test(rawTarget);
+    var target = serviceName(rawTarget).replace(/\.timer$/, '');
     var sys = ctx.sys;
     sys.evidence = sys.evidence || {};
+    hydrateUnits(sys);
 
     if (failed) {
       sys.evidence['services:failed'] = true;
@@ -112,15 +181,32 @@
     }
     if (!command) command = 'list-units';
 
+    if (command === 'list-timers') {
+      sys.evidence['timers:list'] = true;
+      var timerRows = ['NEXT                         LEFT          LAST                         PASSED       UNIT                         ACTIVATES'];
+      Object.keys(sys.timers).forEach(function (name) {
+        var item = sys.timers[name];
+        timerRows.push('Sat 2026-11-14 02:00:00 UTC  12h left      n/a                          n/a          ' + (name + '.timer').padEnd(28, ' ') + ' ' + (item.unit || name + '.service'));
+      });
+      timerRows.push('');
+      timerRows.push(timerRows.length - 1 + ' timers listed.');
+      return C.ok(timerRows.join('\n') + '\n');
+    }
+
     if (command === 'status') {
       if (!target) return C.fail('systemctl: too few arguments', 1);
+      if (isTimer) {
+        if (!sys.timers[target]) return C.fail('Unit ' + target + '.timer could not be found.', 4);
+        return timerStatus(sys, target, target);
+      }
+      sys.evidence['services:status:' + target] = true;
       if (target === 'sshd') sys.evidence['services:status:sshd'] = true;
       var service = sys.services[target];
       if (!service || !serviceInstalled(sys, service)) return C.fail('Unit ' + target + '.service could not be found.', 4);
       var loaded = service.enabled ? 'enabled' : 'disabled';
       var lines = [
         '● ' + target + '.service - ' + service.description,
-        '     Loaded: loaded (/usr/lib/systemd/system/' + target + '.service; ' + loaded + '; preset: disabled)',
+        '     Loaded: loaded (' + (service.generated ? '/etc/systemd/system/' : '/usr/lib/systemd/system/') + target + '.service; ' + loaded + '; preset: disabled)',
         statusLine(service),
         '       Docs: man:' + target + '(8)',
         service.pid ? '   Main PID: ' + service.pid + ' (' + target + ')' : '   Main PID: ' + (service.pid || 0) + ' (code=exited, status=0/SUCCESS)',
@@ -134,8 +220,15 @@
     }
 
     if (command === 'start' || command === 'stop' || command === 'restart' || command === 'reload' || command === 'try-restart') {
-      if (!C.isRoot(ctx)) return C.fail('Failed to ' + command + ' ' + target + '.service: Access denied', 1);
+      if (!C.isRoot(ctx)) return C.fail('Failed to ' + command + ' ' + target + (isTimer ? '.timer' : '.service') + ': Access denied', 1);
       if (!target) return C.fail('systemctl: too few arguments', 1);
+      if (isTimer) {
+        var timer = sys.timers[target];
+        if (!timer) return C.fail('Unit ' + target + '.timer could not be found.', 4);
+        timer.active = command === 'start' || command === 'restart' || command === 'try-restart';
+        Machine.journal(sys, target + '.timer', 6, (timer.active ? 'Started' : 'Stopped') + ' ' + target + '.timer.', 0);
+        return C.ok('');
+      }
       if (command === 'restart' || command === 'try-restart') {
         var restart = stopService(ctx, target);
         if (!restart.ok) return C.fail('Failed to restart ' + target + '.service: ' + restart.message, 1);
@@ -161,6 +254,15 @@
     if (command === 'enable' || command === 'disable') {
       if (!C.isRoot(ctx)) return C.fail('Failed to ' + command + ' unit: Access denied', 1);
       if (!target) return C.fail('systemctl: too few arguments', 1);
+      if (isTimer) {
+        var enableTimer = sys.timers[target];
+        if (!enableTimer) return C.fail('Failed to ' + command + ' unit: Unit file ' + target + '.timer does not exist.', 1);
+        enableTimer.enabled = command === 'enable';
+        if (now && command === 'enable') enableTimer.active = true;
+        if (now && command === 'disable') enableTimer.active = false;
+        Machine.journal(sys, target + '.timer', 6, (command === 'enable' ? 'Enabled' : 'Disabled') + ' ' + target + '.timer.', 0);
+        return C.ok('');
+      }
       var service = sys.services[target];
       if (!service || !serviceInstalled(sys, service)) return C.fail('Failed to ' + command + ' unit: Unit file ' + target + '.service does not exist.', 1);
       service.enabled = command === 'enable';
@@ -178,11 +280,19 @@
     }
 
     if (command === 'is-active') {
+      if (isTimer) {
+        var activeTimer = sys.timers[target];
+        return C.ok((activeTimer && activeTimer.active ? 'active' : 'inactive') + '\n', activeTimer && activeTimer.active ? 0 : 3);
+      }
       var activeService = sys.services[target];
       var active = activeService && activeService.active;
       return C.ok((active ? 'active' : 'inactive') + '\n', active ? 0 : 3);
     }
     if (command === 'is-enabled') {
+      if (isTimer) {
+        var enabledTimer = sys.timers[target];
+        return C.ok((enabledTimer && enabledTimer.enabled ? 'enabled' : 'disabled') + '\n', enabledTimer && enabledTimer.enabled ? 0 : 1);
+      }
       var enabledService = sys.services[target];
       var enabled = enabledService && enabledService.enabled;
       if (target === 'sshd') sys.evidence['services:enabled:sshd'] = true;
@@ -201,13 +311,19 @@
       sys.defaultTarget = target || sys.defaultTarget;
       return C.ok('');
     }
-    if (command === 'daemon-reload') return C.ok('');
+    if (command === 'daemon-reload') {
+      hydrateUnits(sys);
+      return C.ok('');
+    }
     if (command === 'list-unit-files') {
       var unitFiles = ['UNIT FILE STATE'];
       Object.keys(sys.services).forEach(function (name) {
         var item = sys.services[name];
         if (!serviceInstalled(sys, item)) return;
         unitFiles.push(name + '.service ' + (item.enabled ? 'enabled' : 'disabled'));
+      });
+      Object.keys(sys.timers).forEach(function (name) {
+        unitFiles.push(name + '.timer ' + (sys.timers[name].enabled ? 'enabled' : 'disabled'));
       });
       return C.ok(unitFiles.join('\n') + '\n');
     }
@@ -259,6 +375,7 @@
     var entries = ctx.sys.journal.slice();
     ctx.sys.evidence = ctx.sys.evidence || {};
     if (unit === 'sshd') ctx.sys.evidence['services:journal:sshd'] = true;
+    if (unit) ctx.sys.evidence['services:journal:' + unit] = true;
     if (unit) entries = entries.filter(function (entry) { return serviceName(entry.unit) === unit; });
     if (priority !== null) entries = entries.filter(function (entry) { return entry.priority <= priority; });
     if (count !== null && count >= 0) entries = entries.slice(-count);
@@ -486,12 +603,45 @@
     var available = sys.packages.available || {};
 
     if (command === 'repolist') {
-      return C.ok('repo id                     repo name                                status\nbaseos                      RHEL 9 BaseOS                            enabled\nappstream                   RHEL 9 AppStream                         enabled\n');
+      sys.evidence['dnf:repolist'] = true;
+      var repoRows = ['repo id                     repo name                                status', 'baseos                      RHEL 9 BaseOS                            enabled', 'appstream                   RHEL 9 AppStream                         enabled'];
+      Object.keys(sys.fs).filter(function (path) { return /^\/etc\/yum\.repos\.d\/.*\.repo$/.test(path); }).forEach(function (path) {
+        var content = sys.fs[path].content || '';
+        var ids = content.match(/^\[([^\]]+)\]/gm) || [];
+        ids.forEach(function (id) {
+          var name = id.slice(1, -1);
+          if (name === 'baseos' || name === 'appstream') return;
+          repoRows.push(name.padEnd(28, ' ') + 'Fieldbook local packages'.padEnd(41, ' ') + 'enabled');
+        });
+      });
+      return C.ok(repoRows.join('\n') + '\n');
+    }
+    if (command === 'module') {
+      var moduleAction = values[0] || 'list';
+      var moduleSpec = values[1] || 'php';
+      var moduleName = moduleSpec.split(':')[0];
+      if (moduleAction === 'list') {
+        sys.evidence['dnf:module'] = true;
+        return C.ok('Name Stream Profiles Summary\n' + moduleName + ' 8.0 default [d] PHP scripting language\n' + moduleName + ' 8.2 [d][e] common [d] PHP scripting language\nHint: [d]efault, [e]nabled, [x]disabled\n');
+      }
+      if (moduleAction === 'enable' || moduleAction === 'install') {
+        var parts = moduleSpec.split(':');
+        if (parts.length < 2) return C.fail('Error: missing stream for module ' + moduleName, 1);
+        sys.dnfModules = sys.dnfModules || {};
+        sys.dnfModules[moduleName] = parts[1];
+        sys.evidence['dnf:module'] = true;
+        return C.ok('Dependencies resolved.\nNothing to do.\nComplete!\n');
+      }
+      if (moduleAction === 'reset') {
+        sys.dnfModules = {};
+        return C.ok('');
+      }
     }
     if (command === 'info') {
       var name = values[0];
       var pkg = installed[name] || available[name];
       if (!pkg) return C.fail('Error: No matching Packages to list', 1);
+      sys.evidence['dnf:info:' + name] = true;
       return C.ok([
         'Name         : ' + pkg.name,
         'Epoch        : 0',
@@ -517,6 +667,7 @@
       return C.ok('Last metadata expiration check: 0:12:34 ago on Sat 14 Nov 2026 09:17:00 AM UTC.\n');
     }
     if (command === 'makecache') {
+      sys.evidence['dnf:makecache'] = true;
       Machine.journal(sys, 'systemd', 6, 'Finished dnf makecache.', 0);
       return C.ok('Metadata cache created.\n');
     }
@@ -542,6 +693,7 @@
       return C.ok('No matches found.\n', 1);
     }
     if (command === 'history') {
+      sys.evidence['dnf:history'] = true;
       if (!sys.dnfHistory || !sys.dnfHistory.length) {
         return C.ok('ID     | Command line             | Date and time    | Action(s)      | Altered\n-------------------------------------------------------------------------------\n');
       }
@@ -683,6 +835,8 @@
     if (action === 'list-services') return C.ok(bucket.services.join(' ') + '\n');
     if (action === 'list-ports') return C.ok(bucket.ports.join(' ') + '\n');
     if (action === 'list-all') {
+      ctx.sys.evidence = ctx.sys.evidence || {};
+      ctx.sys.evidence['firewall:list'] = true;
       return C.ok(fw.zone + ' (active)\n  target: default\n  icmp-block-inversion: no\n  interfaces: ' + fw.interfaces.join(' ') + '\n  sources:\n  services: ' + bucket.services.join(' ') + '\n  ports: ' + bucket.ports.join(' ') + '\n  protocols:\n  forward: yes\n  masquerade: no\n  forward-ports:\n  source-ports:\n  icmp-blocks:\n  rich rules:\n');
     }
     if (action === 'set-default-zone') {
@@ -874,7 +1028,14 @@
     return C.ok('procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu-----\n r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st\n 1  0      0 1126400  28300 1616244    0    0    12    28  110  220  0  0 99  0  0\n');
   });
 
-  reg('ip', function (ctx) {
+  reg('ip', function (ctx, args) {
+    ctx.sys.evidence = ctx.sys.evidence || {};
+    if (args.indexOf('route') !== -1 || args.indexOf('r') !== -1) ctx.sys.evidence['network:route'] = true;
+    if (args.indexOf('address') !== -1 || args.indexOf('addr') !== -1 || args.indexOf('-brief') !== -1) ctx.sys.evidence['network:address'] = true;
+    if (args.indexOf('route') !== -1 || args.indexOf('r') !== -1) {
+      var routes = ctx.sys.network && ctx.sys.network.routes ? ctx.sys.network.routes : [];
+      return C.ok(routes.join('\n') + '\n');
+    }
     return C.ok('1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n2: ens3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000\n    link/ether 52:54:00:8a:2b:1c brd ff:ff:ff:ff:ff:ff\n    inet 192.0.2.50/24 brd 192.0.2.255 scope global dynamic noprefixroute ens3\n');
   });
 
@@ -886,7 +1047,54 @@
     return C.ok(lines.join('\n') + '\n');
   });
 
-  reg('nmcli', function (ctx) {
+  reg('nmcli', function (ctx, args) {
+    var sys = ctx.sys;
+    sys.network = sys.network || { connections: {}, routes: [] };
+    sys.network.connections = sys.network.connections || {};
+    var object = args[0] || '';
+    var action = args[1] || '';
+    if (!object || object === 'general' || (object === 'device' && action === 'status')) {
+      sys.evidence['nmcli:device'] = true;
+      return C.ok('DEVICE  TYPE      STATE                   CONNECTION\nens3    ethernet  connected               Wired connection 1\nlo      loopback  connected (externally)  lo\n');
+    }
+    if (object === 'connection' && (!action || action === 'show')) {
+      sys.evidence['nmcli:connections'] = true;
+      var only = args.filter(function (arg) { return arg !== 'connection' && arg !== 'show' && arg !== '--active'; })[0];
+      if (only && sys.network.connections[only]) {
+        var connection = sys.network.connections[only];
+        return C.ok('connection.id:                          ' + connection.name + '\nconnection.interface-name:              ' + connection.device + '\nipv4.method:                            ' + connection.method + '\nipv4.addresses:                         ' + connection.addresses + '\nipv4.gateway:                           ' + connection.gateway + '\nipv4.dns:                               ' + connection.dns + '\nGENERAL.STATE:                          ' + (connection.active ? '100 (connected)' : '30 (disconnected)') + '\n');
+      }
+      return C.ok('NAME                UUID                                  TYPE      DEVICE\nWired connection 1  2f1c2a3b-4d5e-8f90-1a2b-3c4d5e6f7081  ethernet  ens3\n');
+    }
+    if (object === 'connection' && action === 'modify') {
+      if (!C.isRoot(ctx)) return C.fail('Error: Failed to modify connection: Insufficient privileges', 1);
+      var profileName = args[2];
+      var profile = sys.network.connections[profileName];
+      if (!profile) return C.fail('Error: unknown connection \'' + profileName + '\'.', 10);
+      for (var i = 3; i < args.length; i++) {
+        var token = args[i];
+        var value = null;
+        var key = token;
+        var eq = token.indexOf('=');
+        if (eq !== -1) { key = token.slice(0, eq); value = token.slice(eq + 1); }
+        else { value = args[++i]; }
+        if (key === 'ipv4.method') profile.method = value;
+        else if (key === 'ipv4.addresses') profile.addresses = value;
+        else if (key === 'ipv4.gateway') profile.gateway = value;
+        else if (key === 'ipv4.dns') profile.dns = value;
+      }
+      sys.evidence['network:profile'] = true;
+      return C.ok('');
+    }
+    if (object === 'connection' && (action === 'up' || action === 'down')) {
+      if (!C.isRoot(ctx)) return C.fail('Error: Failed to activate connection: Insufficient privileges', 1);
+      var name = args[2];
+      var conn = sys.network.connections[name];
+      if (!conn) return C.fail('Error: unknown connection \'' + name + '\'.', 10);
+      conn.active = action === 'up';
+      sys.evidence['network:activated'] = true;
+      return C.ok('Connection successfully activated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/1)\n');
+    }
     return C.ok(' ens3  ethernet  connected  Wired connection 1\n');
   });
 
@@ -966,8 +1174,13 @@
     var lv = ctx.sys.lvm.lvs.filter(function (item) { return item.name === lvName; })[0];
     var mount = ctx.sys.mounts.filter(function (item) { return item.target === (lv && lv.mount); })[0];
     if (lv) {
-      var current = C.parseSize(lv.size) || 0;
-      lv.size = C.humanSize(add ? current + bytes : bytes).replace('B', '');
+      var current = lv.sizeValue || C.parseSize(lv.size) || 0;
+      lv.sizeValue = add ? current + bytes : bytes;
+      lv.size = C.humanSize(lv.sizeValue).replace('B', '');
+      var lvNode = ctx.sys.fs['/dev/' + lv.vg + '/' + lv.name];
+      if (lvNode) lvNode.size = lv.sizeValue;
+      var block = (ctx.sys.blockDevices || []).filter(function (item) { return item.name === lv.vg + '-' + lv.name; })[0];
+      if (block) block.size = lv.size;
     }
     if (mount) {
       mount.size = add ? mount.size + bytes : bytes;
@@ -1030,6 +1243,8 @@
     if (!archiveRead.ok) return C.fail('tar: ' + archive + ': ' + archiveRead.message);
     var archiveEntries = archiveRead.node.tarEntries || [];
     if (list) {
+      ctx.sys.evidence = ctx.sys.evidence || {};
+      ctx.sys.evidence['tar:list'] = true;
       return C.ok(archiveEntries.map(function (entry) { return entry.type === 'dir' ? entry.name + '/' : entry.name; }).join('\n') + (archiveEntries.length ? '\n' : ''));
     }
     if (extract) {

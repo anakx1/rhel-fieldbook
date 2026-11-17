@@ -1,0 +1,14 @@
+<p>DNF resolves dependencies and presents a transaction. Read it. Confirm that the package count, download size, and removals match your intent, especially on a production host.</p>
+        <div class="code-label"><span>terminal · install, update, remove</span></div>
+        <pre><code>sudo dnf install httpd
+sudo dnf update
+sudo dnf remove httpd
+sudo dnf history
+sudo dnf history info 42
+sudo dnf history undo 42</code></pre>
+        <p><code>dnf update</code> without arguments updates all installed packages. That may be correct for a routine patch window and wrong for a targeted fix. For a single package, name it: <code>sudo dnf update openssl</code>. Use <code>dnf check-update</code> to preview available updates without applying them.</p>
+        <p>Every transaction gets a history ID. This is invaluable during an incident: you can see what changed, when, and by which user. Undo is not magic — it attempts to reverse the transaction, and dependency conflicts may prevent a clean rollback. Snapshots and tested backups remain the real safety net.</p>
+        <div class="callout warn">
+          <div class="callout-title">Do not pipe the internet into your shell</div>
+          <p>Adding random repositories or running vendor install scripts bypasses signed package policy and change tracking. Prefer official repositories; if you must add a third party, document the source and trust decision.</p>
+        </div>

@@ -1,0 +1,9 @@
+<p>A typical RHEL prompt looks like this:</p>
+        <div class="code-label"><span>prompt</span></div>
+        <pre><code>[student@rhel-lab ~]$</code></pre>
+        <p>Read it left to right. <code>student</code> is the current user. <code>rhel-lab</code> is the hostname. <code>~</code> is the current working directory, and <code>~</code> is shorthand for the user's home directory. The final character is the privilege signal: <code>$</code> means a regular user; <code>#</code> means root.</p>
+        <p>The prompt is configured in the shell's startup files, usually <code>~/.bashrc</code> and <code>/etc/bashrc</code>. You can change its appearance, but first learn to read it. A surprising number of "permission denied" moments are really "I thought I was root and I was not."</p>
+        <div class="callout warn">
+          <div class="callout-title">Root changes everything</div>
+          <p>When the prompt ends in <code>#</code>, there is no safety net on commands like <code>rm</code>, <code>dd</code>, or <code>chmod</code>. Use <code>sudo</code> for one command at a time instead of living in a root shell.</p>
+        </div>

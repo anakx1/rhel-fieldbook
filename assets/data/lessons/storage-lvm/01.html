@@ -1,0 +1,18 @@
+<p>LVM inserts a flexible allocation layer between hardware and filesystems. You can add a disk to a pool, carve a new volume, or extend an existing one without repartitioning the physical device.</p>
+<figure class="diagram" aria-labelledby="lvm-stack-title">
+<svg viewBox="0 0 720 300" role="img">
+<title id="lvm-stack-title">LVM stack: physical volumes feed a volume group, which allocates logical volumes and filesystems</title>
+<rect x="20" y="28" width="680" height="54" rx="8" class="diagram-box diagram-fs"/><text x="360" y="52" text-anchor="middle" class="diagram-title">Filesystem · XFS mounted at /app</text><text x="360" y="70" text-anchor="middle" class="diagram-label">grows online, cannot shrink</text>
+<rect x="20" y="100" width="680" height="54" rx="8" class="diagram-box diagram-lv"/><text x="360" y="124" text-anchor="middle" class="diagram-title">Logical volume · /dev/vgdata/lvapp</text><text x="360" y="142" text-anchor="middle" class="diagram-label">a block device made of extents</text>
+<rect x="20" y="172" width="680" height="54" rx="8" class="diagram-box diagram-vg"/><text x="360" y="196" text-anchor="middle" class="diagram-title">Volume group · vgdata</text><text x="360" y="214" text-anchor="middle" class="diagram-label">pools free space from all PVs</text>
+<rect x="20" y="244" width="320" height="42" rx="8" class="diagram-box diagram-pv"/><text x="180" y="270" text-anchor="middle" class="diagram-title">PV · /dev/sdb</text>
+<rect x="380" y="244" width="320" height="42" rx="8" class="diagram-box diagram-pv"/><text x="540" y="270" text-anchor="middle" class="diagram-title">PV · /dev/sdc</text>
+<path d="M180 244V226M540 244V226" class="diagram-line"/><path d="M360 226H180M360 226H540M360 226V226" class="diagram-line"/><path d="M360 226V172M360 172V154M360 154V100M360 100V82" class="diagram-line"/>
+</svg><figcaption>One volume group can span several physical volumes. The filesystem sits on the logical volume, not directly on the disk.</figcaption>
+</figure>
+<div class="code-label"><span>terminal · inspect the stack</span></div>
+<pre><code>lsblk
+sudo pvs
+sudo vgs
+sudo lvs</code></pre>
+<p>Read those commands bottom-up: PVs are the raw devices, the VG is the pool, and LVs are the block devices you format and mount. The filesystem is the top layer.</p>

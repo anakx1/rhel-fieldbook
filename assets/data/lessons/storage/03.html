@@ -1,0 +1,17 @@
+<p>"Disk full" is three different problems wearing the same jacket:</p>
+        <ol>
+          <li><strong>Blocks exhausted</strong> — no free data blocks. <code>df -h</code> shows 100% use.</li>
+          <li><strong>Inodes exhausted</strong> — many tiny files consume metadata. <code>df -h</code> may show free space while <code>df -i</code> shows 100% inode use.</li>
+          <li><strong>Deleted but open</strong> — a process still holds a deleted file. Space is not reclaimed until the file descriptor closes. <code>lsof +L1</code> finds these.</li>
+        </ol>
+        <div class="code-label"><span>terminal · capacity forensics</span></div>
+        <pre><code>df -hT
+df -i
+sudo du -xhd1 /var | sort -rh | head
+sudo lsof +L1</code></pre>
+        <p><code>du -x</code> stays on one filesystem, which prevents it from wandering into other mounts. <code>-d1</code> limits depth. Sorting by human-readable size is convenient but not perfectly numeric; use <code>du -sk</code> and sort <code>-n</code> when precision matters.</p>
+        <p>On RHEL, <code>/var</code> is the usual suspect: logs, journal, package cache, containers, and application data. Do not delete blindly. Identify the owner, apply the service's retention tool, and fix the cause. A log that grows unbounded will fill the disk again tomorrow.</p>
+        <div class="callout tip">
+          <div class="callout-title">Use the right cleanup tool</div>
+          <p><code>dnf clean all</code> clears package cache. <code>journalctl --vacuum-size=500M</code> trims the journal. Application logs have their own rotation policy. <code>rm</code> is not a retention strategy.</p>
+        </div>

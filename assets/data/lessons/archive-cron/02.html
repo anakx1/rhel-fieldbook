@@ -1,0 +1,14 @@
+<p>A user crontab has five schedule fields followed by the command. The fields are minute (0–59), hour (0–23), day of month (1–31), month (1–12), and day of week (0–7, where both 0 and 7 mean Sunday).</p>
+<div class="code-label"><span>/tmp/fieldbook.cron</span></div>
+<pre><code>0 2 * * * /usr/local/bin/fieldbook-backup</code></pre>
+<div class="table-wrap"><table><thead><tr><th>Expression</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>0 2 * * *</code></td><td>Every day at 02:00</td></tr>
+<tr><td><code>*/15 * * * *</code></td><td>Every 15 minutes</td></tr>
+<tr><td><code>30 1 * * 1</code></td><td>Mondays at 01:30</td></tr>
+<tr><td><code>0 3 1 * *</code></td><td>First day of each month at 03:00</td></tr>
+</tbody></table></div>
+<div class="code-label"><span>terminal · install and inspect</span></div>
+<pre><code>crontab /tmp/fieldbook.cron
+crontab -l
+systemctl status crond</code></pre>
+<p>Cron runs with a minimal environment and no interactive shell profile. Use absolute paths, set any required PATH explicitly inside the crontab or wrapper, and redirect output so failures are not silently discarded. A wrapper script is easier to test than a long inline command.</p>

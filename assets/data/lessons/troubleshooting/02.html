@@ -1,0 +1,27 @@
+<p>These commands are not a ritual. Each answers a different question. Run the ones that match the symptom, in an order that rules out the broadest causes first.</p>
+        <div class="code-label"><span>terminal · first-pass health check</span></div>
+        <pre><code>uptime
+systemctl --failed
+journalctl -p err -b --no-pager | tail -n 20
+df -hT
+df -i
+free -h
+ip -br addr
+ip route
+sudo ss -tulpn
+sudo dnf history | head</code></pre>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Question</th><th>Command</th><th>What good looks like</th></tr></thead>
+            <tbody>
+              <tr><td>Is the system under pressure?</td><td><code>uptime</code>, <code>free -h</code></td><td>Load is proportionate; memory is not exhausted.</td></tr>
+              <tr><td>Did a unit fail?</td><td><code>systemctl --failed</code></td><td>Empty list, or a specific unit to investigate.</td></tr>
+              <tr><td>What errors are recent?</td><td><code>journalctl -p err -b</code></td><td>A short, time-correlated set of messages.</td></tr>
+              <tr><td>Is storage exhausted?</td><td><code>df -hT</code>, <code>df -i</code></td><td>Free blocks and inodes on every mount.</td></tr>
+              <tr><td>Is the network configured?</td><td><code>ip addr</code>, <code>ip route</code></td><td>Expected address and a default route.</td></tr>
+              <tr><td>Is anything listening?</td><td><code>ss -tulpn</code></td><td>The expected service on the expected port and address.</td></tr>
+              <tr><td>What changed?</td><td><code>dnf history</code></td><td>A known transaction, or no recent package change.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Do not run all ten on every issue. If a user cannot reach a website, start with the listener, the firewall, and the route. If the host is slow, start with load, memory, and I/O. If a service will not start, start with its unit status and journal.</p>

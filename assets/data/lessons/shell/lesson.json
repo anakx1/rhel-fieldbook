@@ -1,0 +1,157 @@
+{
+  "id": "shell",
+  "module": "m01",
+  "title": "The shell, decoded",
+  "subtitle": "Read the prompt, speak the grammar, and make the command line feel less like a password.",
+  "minutes": 22,
+  "difficulty": "Starter",
+  "tags": [
+    "bash",
+    "shell",
+    "ssh",
+    "prompt"
+  ],
+  "objectives": [
+    "Read a shell prompt and know which user and directory you are in",
+    "Break a command into its command name, options, and arguments",
+    "Use tab completion, history, and keyboard shortcuts to work faster",
+    "Connect to a remote RHEL host with SSH",
+    "Recognize the difference between a regular user and root"
+  ],
+  "sections": [
+    {
+      "title": "The prompt is a status line",
+      "file": "01.html"
+    },
+    {
+      "title": "Command grammar: verb, flags, objects",
+      "file": "02.html"
+    },
+    {
+      "title": "The shortcuts that buy back hours",
+      "file": "03.html"
+    },
+    {
+      "title": "First contact: the commands you will use daily",
+      "file": "04.html"
+    },
+    {
+      "title": "Remote access with SSH",
+      "file": "05.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "whoami",
+      "desc": "Print the effective username.",
+      "category": "Shell"
+    },
+    {
+      "cmd": "hostnamectl status",
+      "desc": "Show hostname and operating system details.",
+      "category": "Shell"
+    },
+    {
+      "cmd": "pwd",
+      "desc": "Print the current working directory.",
+      "category": "Filesystem"
+    },
+    {
+      "cmd": "uptime",
+      "desc": "Show uptime, logged-in users, and load averages.",
+      "category": "Processes"
+    },
+    {
+      "cmd": "echo \"$HOME\"",
+      "desc": "Print a value with variable expansion.",
+      "category": "Shell"
+    },
+    {
+      "cmd": "type ls",
+      "desc": "Show how the shell resolves a command.",
+      "category": "Shell"
+    },
+    {
+      "cmd": "ssh student@server",
+      "desc": "Open a remote shell over SSH.",
+      "category": "Network"
+    },
+    {
+      "cmd": "history",
+      "desc": "List recent commands with numbers.",
+      "category": "Shell"
+    },
+    {
+      "cmd": "exit",
+      "desc": "Leave the current shell or SSH session.",
+      "category": "Shell"
+    }
+  ],
+  "lab": {
+    "title": "Your first five minutes",
+    "scenario": "Practice reading context before acting. You will repeat this exact check every time you land on a new system.",
+    "minutes": 10,
+    "steps": [
+      {
+        "text": "Run the identity check and confirm the prompt matches reality.",
+        "cmd": "whoami && hostname && pwd",
+        "verify": "The username and hostname should match the prompt; pwd should be your home directory."
+      },
+      {
+        "text": "Inspect system uptime and load averages.",
+        "cmd": "uptime",
+        "verify": "The load averages are three numbers: 1, 5, and 15 minutes."
+      },
+      {
+        "text": "Print your home directory using both single and double quotes. Compare the output.",
+        "cmd": "echo \"$HOME\" && echo '$HOME'",
+        "verify": "Double quotes expand $HOME, while single quotes print it literally; the two outputs should differ."
+      },
+      {
+        "text": "Find out whether cd is a shell builtin or an external binary.",
+        "cmd": "type cd",
+        "verify": "It should report that cd is a shell builtin."
+      },
+      {
+        "text": "Inspect your last commands and re-run one using history expansion.",
+        "cmd": "history | tail -n 5",
+        "verify": "history should list recent commands with numbers, and the expansion should run one of them again."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "What does a prompt ending in # tell you?",
+      "options": [
+        "The shell is in a container",
+        "The effective user is root",
+        "The last command failed",
+        "The host is offline"
+      ],
+      "answer": 1,
+      "why": "A # prompt conventionally indicates root. A $ prompt indicates a regular user."
+    },
+    {
+      "q": "Which command shows the current directory?",
+      "options": [
+        "cd",
+        "pwd",
+        "ls -a",
+        "whoami"
+      ],
+      "answer": 1,
+      "why": "pwd stands for print working directory. cd changes it; ls lists its contents."
+    },
+    {
+      "q": "What is the safest way to run one command as root?",
+      "options": [
+        "Log in as root permanently",
+        "Disable the password",
+        "Use sudo for that command",
+        "Add your user to every group"
+      ],
+      "answer": 2,
+      "why": "sudo grants privilege for one command and leaves an audit trail. A permanent root shell removes friction and safety at the same time."
+    }
+  ]
+}

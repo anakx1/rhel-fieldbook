@@ -1,0 +1,181 @@
+{
+  "id": "systemd-units",
+  "module": "m07",
+  "title": "systemd units that behave",
+  "subtitle": "Turn a command into a supervised service with dependencies, restart policy, and an install target.",
+  "minutes": 40,
+  "difficulty": "Operator",
+  "tags": [
+    "systemd",
+    "unit files",
+    "services",
+    "boot",
+    "daemon-reload"
+  ],
+  "objectives": [
+    "Describe how systemd reaches a target during boot",
+    "Read the three sections of a service unit",
+    "Write a oneshot or simple service and load it",
+    "Enable a unit so it starts at boot",
+    "Diagnose a failed unit with status and journal evidence"
+  ],
+  "ex200": [
+    {
+      "objective": 0,
+      "exam": "running",
+      "evidence": "Explain the boot path from firmware to default target."
+    },
+    {
+      "objective": 1,
+      "exam": "deploy",
+      "evidence": "Identify [Unit], [Service], and [Install] responsibilities."
+    },
+    {
+      "objective": 2,
+      "exam": "deploy",
+      "evidence": "Create /etc/systemd/system/fieldbook.service and daemon-reload."
+    },
+    {
+      "objective": 3,
+      "exam": "deploy",
+      "evidence": "systemctl enable --now and is-enabled verification."
+    },
+    {
+      "objective": 4,
+      "exam": "running",
+      "evidence": "systemctl status and journalctl -u evidence."
+    }
+  ],
+  "versionNotes": [
+    "RHEL 9 and RHEL 10 both use systemd and the same unit-file sections. RHEL 10 ships a newer systemd, so some newer directives may not exist on RHEL 9; check man systemd.directives on the target.",
+    "RHEL 10 continues the cgroup v2 model used by RHEL 9. Resource controls belong in the unit, not in ad-hoc shell limits."
+  ],
+  "sections": [
+    {
+      "title": "How boot becomes a target",
+      "file": "01.html"
+    },
+    {
+      "title": "Anatomy of a service unit",
+      "file": "02.html"
+    },
+    {
+      "title": "Load it, enable it, diagnose it",
+      "file": "03.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "systemctl list-units --type=service --state=running",
+      "desc": "Show running service units and their descriptions.",
+      "category": "systemd"
+    },
+    {
+      "cmd": "systemctl cat httpd",
+      "desc": "Show the effective unit file and drop-ins.",
+      "category": "systemd"
+    },
+    {
+      "cmd": "sudo systemctl daemon-reload && systemctl show fieldbook.service -p UnitFileState",
+      "desc": "Reload unit files after editing or adding them.",
+      "category": "systemd"
+    },
+    {
+      "cmd": "sudo systemctl enable --now fieldbook.service",
+      "desc": "Enable at boot and start immediately.",
+      "category": "systemd"
+    },
+    {
+      "cmd": "systemctl status fieldbook.service",
+      "desc": "Show state, PID, recent log lines, and exit code.",
+      "category": "systemd"
+    },
+    {
+      "cmd": "journalctl -u fieldbook.service -n 50 --no-pager",
+      "desc": "Read the unit journal without a pager.",
+      "category": "systemd"
+    },
+    {
+      "cmd": "systemctl is-enabled fieldbook.service",
+      "desc": "Check whether the unit is linked into a target.",
+      "category": "systemd"
+    },
+    {
+      "cmd": "sudo systemctl mask fieldbook.service",
+      "desc": "Prevent a unit from being started, even by dependency.",
+      "category": "systemd"
+    }
+  ],
+  "lab": {
+    "title": "Write and enable a health reporter",
+    "scenario": "Create a small oneshot service in /etc/systemd/system, reload the manager, enable it, run it, and inspect the journal. Use /usr/local/bin/fieldbook-report as the executable.",
+    "minutes": 26,
+    "steps": [
+      {
+        "text": "Inspect the running service set and the boot target.",
+        "cmd": "systemctl list-units --type=service --state=running && systemctl get-default",
+        "verify": "You can identify running services and the default target.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create the executable that the service will run.",
+        "cmd": "printf \"#!/bin/bash\\necho fieldbook-report \\$(date)\\n\" | sudo tee /usr/local/bin/fieldbook-report && sudo chmod 755 /usr/local/bin/fieldbook-report",
+        "verify": "/usr/local/bin/fieldbook-report exists with execute permission.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create a oneshot unit with a description and install target.",
+        "cmd": "printf \"[Unit]\\nDescription=Fieldbook health reporter\\nAfter=network.target\\n\\n[Service]\\nType=oneshot\\nExecStart=/usr/local/bin/fieldbook-report\\n\\n[Install]\\nWantedBy=multi-user.target\\n\" | sudo tee /etc/systemd/system/fieldbook.service",
+        "verify": "The file contains Unit, Service, and Install sections and uses an absolute ExecStart path.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Reload systemd, then enable and start the unit.",
+        "cmd": "sudo systemctl daemon-reload && sudo systemctl enable --now fieldbook.service",
+        "verify": "is-enabled returns enabled and the unit reaches a successful state.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Inspect status and journal output for the unit.",
+        "cmd": "systemctl status fieldbook.service && journalctl -u fieldbook.service -n 50 --no-pager",
+        "verify": "Status shows the unit and journal entries are filtered to fieldbook.service.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which section declares dependencies and ordering?",
+      "options": [
+        "[Unit]",
+        "[Service]",
+        "[Install]",
+        "[Target]"
+      ],
+      "answer": 0,
+      "why": "After, Before, Requires, and Wants belong in [Unit]."
+    },
+    {
+      "q": "What must you run after creating a new unit file in /etc/systemd/system?",
+      "options": [
+        "systemctl daemon-reload",
+        "dnf makecache",
+        "journalctl --vacuum",
+        "mount -a"
+      ],
+      "answer": 0,
+      "why": "systemd must reload its unit definitions before it can see the new file."
+    },
+    {
+      "q": "What does systemctl enable --now do?",
+      "options": [
+        "Only enables at boot",
+        "Only starts now",
+        "Enables at boot and starts immediately",
+        "Masks the unit"
+      ],
+      "answer": 2,
+      "why": "--now combines the enable action with an immediate start."
+    }
+  ]
+}

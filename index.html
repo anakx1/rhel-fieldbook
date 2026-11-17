@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="The RHEL Fieldbook — a hands-on, zero-to-production learning path for Red Hat Enterprise Linux. Objectives, labs, quizzes, Broken Systems scenarios, spaced review, a stateful terminal sandbox, and a final exam.">
+  <meta name="description" content="The RHEL Fieldbook — a hands-on, zero-to-production learning path for Red Hat Enterprise Linux. Foundations and Operator lessons, EX200 mapping, labs, quizzes, Broken Systems scenarios, spaced review, printable cheat sheets, a stateful terminal sandbox, and a final exam.">
   <meta name="theme-color" content="#f3efe7">
   <title>RHEL Fieldbook — From first prompt to production</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
@@ -81,6 +81,8 @@
       <div class="footer-col">
         <h2 class="footer-title">Study</h2>
         <a href="#/learn">Level 01 · Foundations</a>
+        <a href="#/learn">Level 02 · Operator</a>
+        <a href="#/cheatsheets">Printable cheat sheets</a>
         <a href="#/roadmap">The complete path</a>
         <a href="#/labs">Hands-on labs</a>
         <a href="#/commands">Command index</a>
@@ -158,10 +160,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="assets/js/data.js"></script>
-  <script src="assets/js/lessons-orientation.js"></script>
-  <script src="assets/js/lessons-operations.js"></script>
-  <script src="assets/js/lessons-systems.js"></script>
-  <script src="assets/js/lessons-practice.js"></script>
+  <script src="assets/js/lab-checks.js"></script>
   <script src="assets/js/quiz-order.js"></script>
   <script src="assets/js/sandbox/vfs.js"></script>
   <script src="assets/js/sandbox/machine.js"></script>
@@ -171,10 +170,12 @@
   <script src="assets/js/sandbox/commands-fs.js"></script>
   <script src="assets/js/sandbox/commands-identity.js"></script>
   <script src="assets/js/sandbox/commands-system.js"></script>
+  <script src="assets/js/sandbox/commands-ops.js"></script>
   <script src="assets/js/sandbox/shell.js"></script>
   <script src="assets/js/sandbox/index.js"></script>
   <script src="assets/js/features.js"></script>
-  <script src="assets/js/app.js"></script>
+  <script src="assets/js/lessons-loader.js"></script>
+  <script type="module" src="assets/js/app.js"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
       window.addEventListener('load', function () {

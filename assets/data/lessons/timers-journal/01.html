@@ -1,0 +1,12 @@
+<p>systemd timers are the native scheduler on RHEL. They trigger units, record results in the journal, and participate in the same dependency and enablement model as every other service.</p>
+<div class="table-wrap"><table><thead><tr><th>Need</th><th>Timer</th><th>Cron</th></tr></thead><tbody>
+<tr><td>Journal integration</td><td>Native</td><td>Mail or manual logging</td></tr>
+<tr><td>Dependency ordering</td><td>systemd unit graph</td><td>None</td></tr>
+<tr><td>Catch-up after downtime</td><td><code>Persistent=true</code></td><td><code>anacron</code> separately</td></tr>
+<tr><td>Simple per-user schedule</td><td>User timers or system units</td><td>Per-user crontab is simpler</td></tr>
+</tbody></table></div>
+<p>Use timers for system work that benefits from supervision and logs. Use cron when a simple per-user cadence is genuinely enough. Do not run both for the same job.</p>
+<div class="code-label"><span>terminal · inspect timers</span></div>
+<pre><code>systemctl list-timers --all
+systemc-analyze calendar "*-*-* 02:00:00"</code></pre>
+<p>The second command has a deliberate typo: it will fail. Read errors as evidence too. The real command is <code>systemd-analyze calendar</code>.</p>

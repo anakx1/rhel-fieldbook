@@ -1,0 +1,148 @@
+{
+  "id": "filesystem",
+  "module": "m01",
+  "title": "One tree, every path",
+  "subtitle": "Learn the filesystem hierarchy, move with intent, and know which directories matter.",
+  "minutes": 24,
+  "difficulty": "Starter",
+  "tags": [
+    "filesystem",
+    "FHS",
+    "paths",
+    "mounts"
+  ],
+  "objectives": [
+    "Explain the single-root filesystem model",
+    "Use absolute and relative paths correctly",
+    "Navigate with pwd, cd, and directory shortcuts",
+    "Identify the purpose of the major RHEL directories",
+    "Connect directories to mounted filesystems"
+  ],
+  "sections": [
+    {
+      "title": "Everything starts at /",
+      "file": "01.html"
+    },
+    {
+      "title": "The landmarks that matter",
+      "file": "02.html"
+    },
+    {
+      "title": "Directories are mount points too",
+      "file": "03.html"
+    },
+    {
+      "title": "Listing with intention",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "pwd -P",
+      "desc": "Print the physical working directory path.",
+      "category": "Filesystem"
+    },
+    {
+      "cmd": "cd /var/log",
+      "desc": "Change to an absolute directory path.",
+      "category": "Filesystem"
+    },
+    {
+      "cmd": "cd -",
+      "desc": "Return to the previous directory.",
+      "category": "Filesystem"
+    },
+    {
+      "cmd": "ls -lah",
+      "desc": "List all files, long format, human-readable sizes.",
+      "category": "Filesystem"
+    },
+    {
+      "cmd": "ls -ld /var/log",
+      "desc": "Inspect a directory entry itself.",
+      "category": "Filesystem"
+    },
+    {
+      "cmd": "findmnt /",
+      "desc": "Show the filesystem mounted at /.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "df -hT",
+      "desc": "Show filesystem type, size, and usage.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "lsblk -f",
+      "desc": "Show block devices, filesystems, UUIDs, and mounts.",
+      "category": "Storage"
+    }
+  ],
+  "lab": {
+    "title": "Map an unfamiliar system",
+    "scenario": "You have landed on a host you did not build. Build a mental map before changing anything.",
+    "minutes": 14,
+    "steps": [
+      {
+        "text": "Start at the root and list the top-level directories.",
+        "cmd": "cd / && ls -l",
+        "verify": "You should see etc, var, home, usr, boot, and the virtual directories."
+      },
+      {
+        "text": "Identify the filesystem backing / and its usage.",
+        "cmd": "findmnt / && df -hT /",
+        "verify": "The device and filesystem type should match between the two commands."
+      },
+      {
+        "text": "Inspect /var/log as a directory entry, then list its contents.",
+        "cmd": "ls -ld /var/log && ls -lh /var/log | head",
+        "verify": "The first command describes the directory; the second describes its files."
+      },
+      {
+        "text": "Find the ten largest entries directly under /var.",
+        "cmd": "du -sh /var/* 2>/dev/null | sort -rh | head",
+        "verify": "du can take time on a busy host; note which directory is largest."
+      },
+      {
+        "text": "Return to your home directory and confirm where you are.",
+        "cmd": "cd ~ && pwd",
+        "verify": "pwd should print /home/<user>, and cd ~ should return there from any directory."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "What is the difference between /var/log and /var/log/messages?",
+      "options": [
+        "One is a directory, one is a file",
+        "Both are files",
+        "Both are mount points",
+        "There is no difference"
+      ],
+      "answer": 0,
+      "why": "/var/log is a directory containing log files; /var/log/messages is a file within it on traditional RHEL configurations."
+    },
+    {
+      "q": "Which command reports filesystem capacity and type?",
+      "options": [
+        "du -sh",
+        "df -hT",
+        "ls -ltr",
+        "free -h"
+      ],
+      "answer": 1,
+      "why": "df reports filesystem-level capacity. du reports directory consumption; free reports memory."
+    },
+    {
+      "q": "Why does cd - work?",
+      "options": [
+        "It opens the root directory",
+        "It returns to the previous working directory",
+        "It deletes the current directory",
+        "It starts a new shell"
+      ],
+      "answer": 1,
+      "why": "The shell remembers the previous directory; cd - switches back to it."
+    }
+  ]
+}

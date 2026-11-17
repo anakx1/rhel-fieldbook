@@ -1,0 +1,19 @@
+<p>Most commands follow a simple grammar: <code>command [options] [arguments]</code>.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Part</th><th>Example</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td>Command</td><td><code>ls</code></td><td>The program to run. Case-sensitive.</td></tr>
+              <tr><td>Short option</td><td><code>-l</code></td><td>One behavior switch. Short flags can often be combined: <code>-lah</code>.</td></tr>
+              <tr><td>Long option</td><td><code>--human-readable</code></td><td>A readable version of the same idea. Usually self-documenting.</td></tr>
+              <tr><td>Argument</td><td><code>/var/log</code></td><td>The object to act on: a path, a user, a package, a service.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Whitespace separates the parts. That means <code>ls -l /var/log</code> is three tokens, while <code>ls -l/var/log</code> is not what you meant. Quote arguments that contain spaces: <code>mkdir "incident notes"</code>.</p>
+        <p>Some commands are <strong>shell builtins</strong> — they run inside Bash rather than as separate programs. <code>cd</code>, <code>pwd</code>, <code>echo</code>, and <code>type</code> are common examples. <code>type cd</code> will tell you that <code>cd</code> is a shell builtin; <code>type ls</code> usually reveals an alias or an external binary.</p>
+        <p>Exit status is the quiet language of the shell. A command returns <code>0</code> for success and a non-zero value for failure. The special variable <code>$?</code> holds the last result:</p>
+        <div class="code-label"><span>terminal · exit status</span></div>
+        <pre><code>ls /etc &gt;/dev/null
+echo $?</code></pre>
+        <p>This matters immediately: shell scripts and automation make decisions by checking exit status, not by reading English output.</p>

@@ -1,0 +1,20 @@
+<p>Linux identifies accounts by <strong>UID</strong> and groups by <strong>GID</strong>. Names are a convenience for humans. The kernel checks numbers; the name service maps names to numbers.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Range</th><th>Typical use</th></tr></thead>
+            <tbody>
+              <tr><td>0</td><td>root</td></tr>
+              <tr><td>1–999</td><td>System accounts used by services</td></tr>
+              <tr><td>1000+</td><td>Regular interactive users (default on RHEL)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The local account database is <code>/etc/passwd</code>, readable by everyone. Each line has seven colon-separated fields:</p>
+        <div class="code-label"><span>passwd format</span></div>
+        <pre><code>name:password-placeholder:UID:GID:GECOS:home:login-shell</code></pre>
+        <p>On a modern RHEL system, the password field contains <code>x</code> and the real hash lives in <code>/etc/shadow</code>, which only root can read. Never copy <code>/etc/shadow</code> into a report. Use <code>getent passwd student</code> and <code>getent group wheel</code> to query identity through the configured name service, which may include more than local files.</p>
+        <div class="code-label"><span>terminal · inspect identity</span></div>
+        <pre><code>id
+id student
+getent passwd student
+getent group wheel</code></pre>

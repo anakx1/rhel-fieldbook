@@ -1,0 +1,12 @@
+<p><code>tar</code> is the standard way to bundle a directory tree. Compression is layered on top with gzip, xz, or zstd.</p>
+        <div class="code-label"><span>terminal · create, inspect, extract</span></div>
+        <pre><code>tar -czf ~/lab/notes-backup.tar.gz -C ~/lab notes
+tar -tzf ~/lab/notes-backup.tar.gz
+mkdir -p ~/lab/restore
+tar -xzf ~/lab/notes-backup.tar.gz -C ~/lab/restore</code></pre>
+        <p>Read the flags as a sentence: <code>c</code> create, <code>x</code> extract, <code>t</code> list, <code>z</code> gzip, <code>f</code> file. <code>-C</code> changes directory for the operation, so the archive contains <code>notes/</code> rather than an absolute path. This makes archives portable and prevents extraction from scattering files across the filesystem.</p>
+        <p>Always list an archive before extracting it, especially if it came from somewhere else. A malicious archive can contain absolute paths or <code>..</code> traversal. <code>tar -tzf</code> is a cheap inspection step.</p>
+        <div class="callout tip">
+          <div class="callout-title">Backups are not archives</div>
+          <p>An archive is a bundle. A backup is a restore plan with retention, verification, and off-host storage. We will build the real thing in later levels.</p>
+        </div>

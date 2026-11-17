@@ -1,0 +1,15 @@
+<p><strong>grep</strong> finds lines. Learn four flags and you can answer most log questions:</p>
+        <div class="code-label"><span>terminal · grep patterns</span></div>
+        <pre><code>grep -i "failed" /var/log/secure
+grep -n "error" /var/log/messages
+grep -v "^#" /etc/ssh/sshd_config
+grep -r "Listen" /etc/httpd/</code></pre>
+        <p><code>-i</code> ignores case, <code>-n</code> prints line numbers, <code>-v</code> inverts the match, and <code>-r</code> searches recursively. Add <code>-E</code> for extended regular expressions. Always quote patterns that contain spaces or shell metacharacters.</p>
+        <p><strong>cut</strong> extracts columns. <strong>sort</strong> orders lines. <strong>uniq</strong> collapses adjacent duplicates, which is why it is almost always paired with <code>sort</code>. <strong>wc</strong> counts lines, words, or bytes.</p>
+        <div class="code-label"><span>terminal · summarize users by shell</span></div>
+        <pre><code>cut -d: -f7 /etc/passwd | sort | uniq -c | sort -nr</code></pre>
+        <p>Read that pipeline left to right: split each passwd line on colons, take the seventh field (the login shell), sort identical values together, count adjacent duplicates, then sort by count descending. This is the pattern behind a huge amount of operational reporting.</p>
+        <p><code>awk</code> is the next step when column logic needs conditions or arithmetic. For now, recognize it:</p>
+        <div class="code-label"><span>terminal · a first awk</span></div>
+        <pre><code>awk -F: '$3 &gt;= 1000 { print $1, $3, $7 }' /etc/passwd</code></pre>
+        <p>That prints local regular users: username, UID, and shell. Do not worry about mastering awk yet. The point is that text tools compose.</p>

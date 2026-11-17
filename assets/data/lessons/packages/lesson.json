@@ -1,0 +1,169 @@
+{
+  "id": "packages",
+  "module": "m03",
+  "title": "Packages and repositories",
+  "subtitle": "Install software from signed repositories, inspect what owns a file, and undo a transaction.",
+  "minutes": 29,
+  "difficulty": "Core",
+  "tags": [
+    "dnf",
+    "rpm",
+    "repositories",
+    "packages",
+    "subscription"
+  ],
+  "objectives": [
+    "Explain the roles of DNF and RPM",
+    "Inspect repositories and package metadata",
+    "Install, remove, and update software with DNF",
+    "Query installed files and verify package integrity",
+    "Use transaction history to understand or reverse a change"
+  ],
+  "sections": [
+    {
+      "title": "Two tools, two jobs",
+      "file": "01.html"
+    },
+    {
+      "title": "Look before you install",
+      "file": "02.html"
+    },
+    {
+      "title": "Change software as a transaction",
+      "file": "03.html"
+    },
+    {
+      "title": "Groups, streams, and verification",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "dnf repolist",
+      "desc": "List enabled repositories.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "dnf search httpd",
+      "desc": "Search package names and summaries.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "dnf info httpd",
+      "desc": "Show package metadata and source repository.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "dnf provides /usr/sbin/sshd",
+      "desc": "Find a package that supplies a file or command.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "sudo dnf install httpd",
+      "desc": "Install a package and its dependencies.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "sudo dnf remove httpd",
+      "desc": "Remove a package and unneeded dependencies.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "sudo dnf update openssl",
+      "desc": "Update a specific package.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "dnf check-update",
+      "desc": "Preview available updates.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "rpm -qa",
+      "desc": "List all installed packages.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "rpm -qi openssh-server",
+      "desc": "Show installed package metadata.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "rpm -V httpd",
+      "desc": "Verify installed files against package metadata.",
+      "category": "Packages"
+    },
+    {
+      "cmd": "dnf history",
+      "desc": "List package transactions.",
+      "category": "Packages"
+    }
+  ],
+  "lab": {
+    "title": "Trace a package end to end",
+    "scenario": "Install a web server from a trusted repository, inspect exactly what it placed on disk, then remove it cleanly.",
+    "minutes": 18,
+    "steps": [
+      {
+        "text": "Confirm repositories are available and locate httpd.",
+        "cmd": "dnf repolist && dnf info httpd",
+        "verify": "Note the repository name, version, and architecture."
+      },
+      {
+        "text": "Install httpd, reading the transaction summary before confirming.",
+        "cmd": "sudo dnf install httpd",
+        "verify": "Review the transaction summary, confirm with y, and dnf should report httpd installed."
+      },
+      {
+        "text": "Find the package owner of the main binary and list package files.",
+        "cmd": "rpm -qf /usr/sbin/httpd && rpm -ql httpd | head -n 20",
+        "verify": "rpm -qf should name httpd, and rpm -ql should list the files it owns."
+      },
+      {
+        "text": "Query the service unit and configuration file ownership.",
+        "cmd": "rpm -ql httpd | grep -E \"(service|conf)$\"",
+        "verify": "The output should include the httpd systemd unit and httpd.conf paths."
+      },
+      {
+        "text": "Review the transaction history and remove the package.",
+        "cmd": "dnf history | head && sudo dnf remove httpd",
+        "verify": "dnf history should show the install; after removal, rpm -q httpd should report not installed."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which command finds the installed package that owns /usr/sbin/sshd?",
+      "options": [
+        "dnf install /usr/sbin/sshd",
+        "rpm -qf /usr/sbin/sshd",
+        "dnf history /usr/sbin/sshd",
+        "rpm -ql /usr/sbin/sshd"
+      ],
+      "answer": 1,
+      "why": "rpm -qf queries the RPM database for the owning package. dnf provides works for available packages too."
+    },
+    {
+      "q": "What is the safest first step before a large dnf update?",
+      "options": [
+        "Disable GPG checks",
+        "Review check-update and the transaction, and ensure a rollback path",
+        "Delete the DNF cache",
+        "Remove old kernels"
+      ],
+      "answer": 1,
+      "why": "Preview the change and know how to recover. Disabling signature checks is never the answer."
+    },
+    {
+      "q": "What does dnf history provide?",
+      "options": [
+        "A list of shell commands",
+        "A record of package transactions with IDs",
+        "The kernel boot log",
+        "Firewall rules"
+      ],
+      "answer": 1,
+      "why": "DNF transactions are recorded with IDs, users, and package changes, enabling inspection and attempted undo."
+    }
+  ]
+}

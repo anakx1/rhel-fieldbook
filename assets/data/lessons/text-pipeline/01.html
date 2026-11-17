@@ -1,0 +1,7 @@
+<p><code>find</code> walks a directory tree and tests each path. Start with a bounded tree, add a type and name, and only then widen. An unbounded <code>find /</code> during an incident is a good way to add I/O pressure while learning very little.</p>
+<div class="code-label"><span>terminal · find with intent</span></div>
+<pre><code>find /var/log -type f -name "*.log"
+find /etc -type f -name "*.conf" -newermt "-7 days"
+find /home -type f -perm /o+w</code></pre>
+<p>The last command looks for world-writable files. <code>-type f</code> excludes directories, <code>-name</code> matches the basename, and <code>-newermt</code> filters by modification time. Use <code>-maxdepth</code> when you mean one level, and quote patterns so the shell does not expand them first.</p>
+<div class="callout tip"><div class="callout-title">Find first, act second</div><p>Run a find expression without an action, inspect the list, then add <code>-exec</code> or a pipe. Batch destruction is not a learning outcome.</p></div>

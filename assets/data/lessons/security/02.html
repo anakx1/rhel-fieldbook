@@ -1,0 +1,27 @@
+<p>When SELinux blocks something, it writes an <strong>AVC denial</strong> to the audit log. The denial names the source domain, target type, and requested permission. That is enough to choose a fix.</p>
+        <div class="code-label"><span>terminal · find recent denials</span></div>
+        <pre><code>sudo ausearch -m AVC -ts recent
+sudo journalctl -t setroubleshoot --since "1 hour ago"
+sudo sealert -a /var/log/audit/audit.log</code></pre>
+        <p>The most common causes and their honest fixes:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Symptom</th><th>Likely cause</th><th>Correct fix</th></tr></thead>
+            <tbody>
+              <tr><td>Web content returns 403 after being copied from /home</td><td>Wrong file type/context</td><td><code>restorecon -Rv /var/www/html</code></td></tr>
+              <tr><td>Service cannot bind a nonstandard port</td><td>Port not allowed for that domain</td><td><code>semanage port -a -t http_port_t -p tcp 8080</code></td></tr>
+              <tr><td>Service needs to make an outbound connection</td><td>Boolean disabled</td><td><code>setsebool -P httpd_can_network_connect on</code></td></tr>
+              <tr><td>Custom app files keep the wrong label</td><td>No matching file-context rule</td><td><code>semanage fcontext -a ...</code> then <code>restorecon</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><code>restorecon</code> applies the policy's expected context to a path. <code>chcon</code> sets a label manually, but it is temporary and can be overwritten by a relabel. Prefer <code>semanage fcontext</code> plus <code>restorecon</code> for persistent custom paths.</p>
+        <div class="code-label"><span>terminal · custom web root</span></div>
+        <pre><code>sudo semanage fcontext -a -t httpd_sys_content_t "/srv/site(/.*)?"
+sudo restorecon -Rv /srv/site
+ls -Z /srv/site</code></pre>
+        <p>Booleans toggle prewritten policy behavior. List them, inspect the description, then set persistently with <code>-P</code>:</p>
+        <div class="code-label"><span>terminal · booleans</span></div>
+        <pre><code>getsebool -a | grep httpd
+sudo setsebool -P httpd_can_network_connect on</code></pre>
+        <p>Do not enable broad booleans because a search result suggested it. Understand the capability you are granting, and prefer the narrowest one that works.</p>

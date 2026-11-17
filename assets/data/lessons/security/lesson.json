@@ -1,0 +1,169 @@
+{
+  "id": "security",
+  "module": "m04",
+  "title": "SELinux without fear",
+  "subtitle": "The second permission system on RHEL — plus a firewall and SSH baseline that stays on.",
+  "minutes": 31,
+  "difficulty": "Core",
+  "tags": [
+    "SELinux",
+    "firewalld",
+    "SSH",
+    "hardening",
+    "security"
+  ],
+  "objectives": [
+    "Explain SELinux modes and security contexts",
+    "Read a denial and find the right fix",
+    "Restore a file context without disabling enforcement",
+    "Apply practical SSH and firewall hardening",
+    "Build a small, repeatable security baseline"
+  ],
+  "sections": [
+    {
+      "title": "SELinux is not a permissions bug",
+      "file": "01.html"
+    },
+    {
+      "title": "Read the denial, then fix the cause",
+      "file": "02.html"
+    },
+    {
+      "title": "SSH and firewall baseline",
+      "file": "03.html"
+    },
+    {
+      "title": "A baseline you can explain",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "getenforce",
+      "desc": "Show the current SELinux mode.",
+      "category": "Security"
+    },
+    {
+      "cmd": "sestatus",
+      "desc": "Show SELinux policy, mode, and status.",
+      "category": "Security"
+    },
+    {
+      "cmd": "ls -Z /var/www/html",
+      "desc": "Show SELinux contexts for files.",
+      "category": "Security"
+    },
+    {
+      "cmd": "ps -eZ",
+      "desc": "Show processes with their SELinux domains.",
+      "category": "Security"
+    },
+    {
+      "cmd": "sudo restorecon -Rv /path",
+      "desc": "Restore policy-defined contexts recursively.",
+      "category": "Security"
+    },
+    {
+      "cmd": "sudo ausearch -m AVC -ts recent",
+      "desc": "Find recent SELinux denials.",
+      "category": "Security"
+    },
+    {
+      "cmd": "getsebool -a | grep httpd",
+      "desc": "List SELinux booleans for httpd.",
+      "category": "Security"
+    },
+    {
+      "cmd": "sudo setsebool -P name on",
+      "desc": "Persistently enable an SELinux boolean.",
+      "category": "Security"
+    },
+    {
+      "cmd": "sudo semanage port -a ...",
+      "desc": "Allow a service domain to bind a custom port.",
+      "category": "Security"
+    },
+    {
+      "cmd": "sudo sshd -t",
+      "desc": "Validate the SSH daemon configuration.",
+      "category": "Security"
+    },
+    {
+      "cmd": "sudo firewall-cmd --list-all",
+      "desc": "Inspect the active firewall zone.",
+      "category": "Security"
+    }
+  ],
+  "lab": {
+    "title": "Keep SELinux enforcing",
+    "scenario": "Deploy content into a web root and diagnose a context mismatch without turning off the control.",
+    "minutes": 22,
+    "steps": [
+      {
+        "text": "Confirm SELinux is enforcing and record the current mode.",
+        "cmd": "getenforce && sestatus",
+        "verify": "getenforce should print Enforcing, and sestatus should confirm the targeted policy."
+      },
+      {
+        "text": "Install httpd and start it.",
+        "cmd": "sudo dnf install -y httpd && sudo systemctl enable --now httpd && systemctl is-active httpd",
+        "verify": "systemctl is-active httpd should print active."
+      },
+      {
+        "text": "Create content in /var/www/html and inspect its context.",
+        "cmd": "echo \"hello from RHEL\" | sudo tee /var/www/html/index.html && ls -Z /var/www/html/index.html",
+        "verify": "ls -Z should show httpd_sys_content_t for the new index.html."
+      },
+      {
+        "text": "Copy a file from your home directory into the web root and compare contexts.",
+        "cmd": "echo \"copied\" &gt; ~/copied.html && sudo cp ~/copied.html /var/www/html/copied.html && ls -Z /var/www/html/copied.html",
+        "verify": "The copied file may retain a home-directory type such as user_home_t."
+      },
+      {
+        "text": "Restore the correct web content context and verify.",
+        "cmd": "sudo restorecon -Rv /var/www/html && ls -Z /var/www/html/copied.html",
+        "verify": "The file should now be httpd_sys_content_t."
+      },
+      {
+        "text": "Check for denials and inspect the firewall.",
+        "cmd": "sudo ausearch -m AVC -ts recent; sudo firewall-cmd --list-all",
+        "verify": "ausearch should show no recent AVC denials, and firewall-cmd should list the public zone."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "What should you try before setting SELinux to permissive?",
+      "options": [
+        "Disable the firewall",
+        "Read the AVC denial and fix the context, port, or boolean",
+        "Delete the audit log",
+        "Reinstall the operating system"
+      ],
+      "answer": 1,
+      "why": "The denial identifies the mismatch. Correcting it preserves protection and fixes the actual cause."
+    },
+    {
+      "q": "Which command restores policy-defined contexts under /var/www/html?",
+      "options": [
+        "chmod -R 755",
+        "restorecon -Rv /var/www/html",
+        "chown -R root",
+        "firewall-cmd --reload"
+      ],
+      "answer": 1,
+      "why": "restorecon applies the expected SELinux context. chmod and chown do not change SELinux labels."
+    },
+    {
+      "q": "Why validate SSH configuration with sshd -t before reloading?",
+      "options": [
+        "It encrypts the keys",
+        "It catches syntax errors before they can lock you out",
+        "It restarts the network",
+        "It disables SELinux"
+      ],
+      "answer": 1,
+      "why": "sshd -t checks the configuration. A bad config plus a restart can remove your remote access."
+    }
+  ]
+}

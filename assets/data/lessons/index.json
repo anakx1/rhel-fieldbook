@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "lessons": [
+    "orientation",
+    "shell",
+    "help",
+    "filesystem",
+    "files",
+    "text",
+    "users",
+    "permissions",
+    "processes",
+    "packages",
+    "services",
+    "network",
+    "storage",
+    "bash",
+    "security",
+    "troubleshooting",
+    "storage-partitions",
+    "storage-lvm",
+    "ssh-sudo",
+    "systemd-units",
+    "timers-journal",
+    "dnf-repos",
+    "network-firewall",
+    "text-pipeline",
+    "archive-cron"
+  ]
+}

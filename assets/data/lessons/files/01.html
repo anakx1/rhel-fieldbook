@@ -1,0 +1,16 @@
+<p>Creating files is easy. Creating them in the wrong place, with the wrong owner, is also easy. Start by making a deliberate directory tree:</p>
+        <div class="code-label"><span>terminal · build a workspace</span></div>
+        <pre><code>mkdir -p ~/lab/notes ~/lab/logs ~/lab/archive
+touch ~/lab/notes/day1.txt
+ls -lR ~/lab</code></pre>
+        <p><code>mkdir -p</code> creates missing parents and does not fail if the target already exists. <code>touch</code> updates timestamps, or creates an empty file if none exists. <code>ls -R</code> walks recursively; use it on small trees, not on <code>/</code>.</p>
+        <p>Before acting on an unfamiliar file, ask what it actually is and when it changed:</p>
+        <div class="code-label"><span>terminal · inspect metadata</span></div>
+        <pre><code>file ~/lab/notes/day1.txt
+stat ~/lab/notes/day1.txt
+du -h ~/lab/notes/day1.txt</code></pre>
+        <p><code>file</code> reads magic bytes and guesses the content type. <code>stat</code> reports inode number, size, permissions, and three timestamps: access, modify, and change. <code>du</code> reports disk usage, which can differ from apparent size because of block allocation, sparse files, and compression.</p>
+        <div class="callout note">
+          <div class="callout-title">Size is not one number</div>
+          <p>The apparent size from <code>stat</code> is not always the space consumed on disk. Use <code>du</code> for block usage and <code>df</code> for filesystem capacity.</p>
+        </div>

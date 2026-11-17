@@ -1,0 +1,12 @@
+<p><code>tar</code> creates a stream. The archive path should be outside the directory being archived, or the archive will try to contain itself. The <code>-C</code> option changes directory before adding the named path, which keeps the stored names relative and predictable.</p>
+<div class="code-label"><span>terminal · create and inspect</span></div>
+<pre><code>mkdir -p /home/student/lab/archive
+tar -czf /home/student/lab/archive/fieldbook-notes.tar.gz -C /home/student/lab/fieldbook notes
+tar -tzf /home/student/lab/archive/fieldbook-notes.tar.gz
+ls -lh /home/student/lab/archive/fieldbook-notes.tar.gz</code></pre>
+<p>Inspect before restore. An archive that lists absolute paths or unexpected entries is a warning. Extract into an empty staging directory, never over the live tree, and compare before replacing anything.</p>
+<div class="code-label"><span>terminal · restore into a clean target</span></div>
+<pre><code>mkdir -p /tmp/fieldbook-restore
+tar -xzf /home/student/lab/archive/fieldbook-notes.tar.gz -C /tmp/fieldbook-restore
+find /tmp/fieldbook-restore -type f</code></pre>
+<div class="callout tip"><div class="callout-title">Compression is not encryption</div><p>A gzip archive is smaller, not secret. Use GPG or another encryption tool when the backup contains credentials or personal data.</p></div>

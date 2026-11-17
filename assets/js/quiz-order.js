@@ -12,7 +12,7 @@
 
   /* Salt chosen so the rendered correct-answer positions stay balanced.
      Changing it changes the display order, so re-run the content validator. */
-  var SALT = 'rhel-fieldbook-quiz-v2-553';
+  var SALT = 'rhel-fieldbook-quiz-v3-10';
 
   function hash(text) {
     var h = 2166136261;

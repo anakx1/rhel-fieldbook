@@ -1,0 +1,18 @@
+<p>A long listing starts with a ten-character mode string. The first character is the file type; the next nine are three triads of permissions.</p>
+        <div class="code-label"><span>terminal · read a long listing</span></div>
+        <pre><code>ls -l /etc/passwd /etc/shadow /var/log
+-rw-r--r--. 1 root root 2841 Nov 12 10:14 /etc/passwd
+----------. 1 root root 1842 Nov 12 10:14 /etc/shadow
+drwxr-xr-x. 8 root root 4096 Nov 12 09:02 /var/log</code></pre>
+        <p>Break <code>-rw-r--r--</code> into: type <code>-</code> (regular file), owner <code>rw-</code>, group <code>r--</code>, other <code>r--</code>. The trailing dot indicates an SELinux security context is present; it is not a permission.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Symbol</th><th>On a file</th><th>On a directory</th></tr></thead>
+            <tbody>
+              <tr><td><code>r</code> (4)</td><td>Read contents.</td><td>List names in the directory.</td></tr>
+              <tr><td><code>w</code> (2)</td><td>Modify contents.</td><td>Create, rename, or delete entries.</td></tr>
+              <tr><td><code>x</code> (1)</td><td>Execute the file.</td><td>Enter the directory and access known paths inside it.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The directory execute bit is the one people miss. Without <code>x</code>, you cannot traverse a directory even if you can read its names. Without <code>r</code>, you can still open a file if you know its exact path and have <code>x</code>.</p>

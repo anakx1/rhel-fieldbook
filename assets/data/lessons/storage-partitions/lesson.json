@@ -1,0 +1,191 @@
+{
+  "id": "storage-partitions",
+  "module": "m05",
+  "title": "Partitions, XFS, and mount policy",
+  "subtitle": "See the whole storage stack, format only what you mean to format, and make a mount survive the next reboot.",
+  "minutes": 38,
+  "difficulty": "Operator",
+  "tags": [
+    "storage",
+    "partitions",
+    "XFS",
+    "fstab",
+    "swap"
+  ],
+  "objectives": [
+    "Read the block-device, filesystem, and mount layers",
+    "Create and format a partition for XFS",
+    "Mount by UUID and persist the mount in /etc/fstab",
+    "Validate fstab safely before rebooting",
+    "Add swap and distinguish a swap partition from a swap file"
+  ],
+  "ex200": [
+    {
+      "objective": 0,
+      "exam": "file-systems",
+      "evidence": "Read lsblk, findmnt, df, and blkid output."
+    },
+    {
+      "objective": 1,
+      "exam": "local-storage",
+      "evidence": "Create a partition and format it with mkfs.xfs."
+    },
+    {
+      "objective": 2,
+      "exam": "file-systems",
+      "evidence": "Persistent /etc/fstab entry using a UUID."
+    },
+    {
+      "objective": 3,
+      "exam": "file-systems",
+      "evidence": "mount -a validates entries before reboot."
+    },
+    {
+      "objective": 4,
+      "exam": "local-storage",
+      "evidence": "mkswap, swapon, and /etc/fstab swap entry."
+    }
+  ],
+  "versionNotes": [
+    "RHEL 9 and RHEL 10 both default to XFS for the root filesystem. XFS can grow online but cannot shrink.",
+    "RHEL 10 keeps the same mount and fstab model; newer systems increasingly prefer systemd mount units generated from fstab rather than hand-written unit files."
+  ],
+  "sections": [
+    {
+      "title": "The storage stack",
+      "file": "01.html"
+    },
+    {
+      "title": "Format, mount, and persist",
+      "file": "02.html"
+    },
+    {
+      "title": "Swap and version differences",
+      "file": "03.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "lsblk -f -o NAME,FSTYPE,UUID,MOUNTPOINTS",
+      "desc": "Show devices, filesystems, UUIDs, and mounts together.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "blkid /dev/sdb1",
+      "desc": "Read the filesystem signature and UUID from one device.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo parted -s /dev/sdb mklabel gpt mkpart primary xfs 0% 100%",
+      "desc": "Create a GPT partition table and one full-disk partition.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo mkfs.xfs /dev/sdb1",
+      "desc": "Create an XFS filesystem. Refuses an existing signature unless -f is explicit.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo mount UUID=\"...\" /mnt/data",
+      "desc": "Mount a filesystem by its stable UUID.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo mount -a -v",
+      "desc": "Validate and apply every /etc/fstab entry.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "findmnt --target /data",
+      "desc": "Show the source, target, type, and options of a mount.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo mkswap /dev/sdc && sudo swapon /dev/sdc",
+      "desc": "Initialise and activate a swap device.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "swapon --show",
+      "desc": "List active swap areas.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo swapoff /dev/sdc",
+      "desc": "Deactivate swap before changing or removing it.",
+      "category": "Storage"
+    }
+  ],
+  "lab": {
+    "title": "A file-backed XFS practice disk",
+    "scenario": "Build capacity from a file, mount it, verify it, and clean up. In production the same operations apply to /dev/sdb1.",
+    "minutes": 24,
+    "steps": [
+      {
+        "text": "Inspect the current block devices, filesystems, and mount points.",
+        "cmd": "lsblk -f && findmnt && df -hT",
+        "verify": "You can identify the device behind /, /boot, and /data, and their filesystem types.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create a 64 MB file-backed disk and format it as XFS.",
+        "cmd": "sudo dd if=/dev/zero of=/tmp/lab-disk.img bs=1M count=64 status=progress && sudo mkfs.xfs /tmp/lab-disk.img",
+        "verify": "mkfs.xfs prints filesystem geometry without refusing the existing data file.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Mount it on a new directory and confirm the effective mount.",
+        "cmd": "sudo mkdir -p /mnt/labdisk && sudo mount -o loop /tmp/lab-disk.img /mnt/labdisk && findmnt /mnt/labdisk",
+        "verify": "findmnt reports a loop source, the XFS type, and /mnt/labdisk as the target.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Write data and check capacity from both filesystem and directory views.",
+        "cmd": "sudo dd if=/dev/zero of=/mnt/labdisk/fill bs=1M count=20 && df -h /mnt/labdisk && du -sh /mnt/labdisk",
+        "verify": "df shows used blocks and du accounts for the fill file.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Unmount, verify it is gone, and remove the practice image.",
+        "cmd": "sudo umount /mnt/labdisk && findmnt /mnt/labdisk; sudo rm /tmp/lab-disk.img && sudo rmdir /mnt/labdisk",
+        "verify": "findmnt returns no row for /mnt/labdisk and the image no longer exists.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Why is a UUID preferred over /dev/sdb1 in /etc/fstab?",
+      "options": [
+        "It makes mounts faster",
+        "Device names can move between boots and hardware changes",
+        "It disables SELinux labelling",
+        "Only UUIDs work with XFS"
+      ],
+      "answer": 1,
+      "why": "UUIDs identify the filesystem itself rather than its current enumeration order."
+    },
+    {
+      "q": "Which command validates fstab entries without rebooting?",
+      "options": [
+        "mount -a",
+        "df -i",
+        "blkid --all",
+        "swapon -a"
+      ],
+      "answer": 0,
+      "why": "mount -a attempts every fstab entry and reports failures while the system is still reachable."
+    },
+    {
+      "q": "What happens when you run mkfs.xfs on a device that already has an XFS signature?",
+      "options": [
+        "It extends the filesystem",
+        "It silently reformats",
+        "It refuses unless you add -f",
+        "It converts the filesystem to ext4"
+      ],
+      "answer": 2,
+      "why": "mkfs.xfs protects existing data. Overwriting requires the explicit -f flag."
+    }
+  ]
+}

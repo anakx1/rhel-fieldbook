@@ -1,0 +1,19 @@
+<p>Storage has layers. A <strong>block device</strong> is a disk or partition. A <strong>filesystem</strong> is the structure written onto it (XFS by default on RHEL). A <strong>mount</strong> attaches that filesystem to a directory in the single tree.</p>
+        <div class="code-label"><span>terminal · see all three layers</span></div>
+        <pre><code>lsblk -f
+blkid
+findmnt
+df -hT</code></pre>
+        <p><code>lsblk -f</code> shows the device tree, filesystem type, label, UUID, and mount point. <code>blkid</code> queries filesystem signatures directly. <code>findmnt</code> shows the mount tree, including source, target, and options. <code>df -hT</code> shows capacity by mounted filesystem.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Layer</th><th>Question it answers</th><th>Tool</th></tr></thead>
+            <tbody>
+              <tr><td>Block device</td><td>What disks and partitions exist?</td><td><code>lsblk</code></td></tr>
+              <tr><td>Filesystem</td><td>What is formatted on it?</td><td><code>blkid</code>, <code>lsblk -f</code></td></tr>
+              <tr><td>Mount</td><td>Where is it attached and with what options?</td><td><code>findmnt</code>, <code>mount</code></td></tr>
+              <tr><td>Consumption</td><td>How much is used and by whom?</td><td><code>df</code>, <code>du</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>An unmounted filesystem is invisible to normal path-based tools. A mounted filesystem's root hides whatever was previously in the mount point directory. This is why mounting over a non-empty directory appears to "lose" files until you unmount.</p>

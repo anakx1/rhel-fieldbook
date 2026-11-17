@@ -1,0 +1,14 @@
+<p>When the volume group has free extents, extending an LV is online work. On XFS, use <code>-r</code> so LVM resizes the filesystem after extending the volume.</p>
+<div class="code-label"><span>terminal · grow the LV and filesystem</span></div>
+<pre><code>sudo vgs
+sudo lvextend -r -L +2G /dev/vgdata/lvapp
+df -h /app
+findmnt /app</code></pre>
+<p>If the VG is out of free space, add another PV with <code>vgextend vgdata /dev/sdc</code> before extending again. If you need more than one LV, keep the VG as the pool and size each LV deliberately.</p>
+<p>Swap can live on a dedicated LV, a partition, or a file. The same activation commands apply. Plan swap as a safety margin, not as a way to avoid diagnosing memory pressure.</p>
+<div class="code-label"><span>terminal · swap on an LV or device</span></div>
+<pre><code>sudo lvcreate -n lvswap -L 2G vgdata
+sudo mkswap /dev/vgdata/lvswap
+sudo swapon /dev/vgdata/lvswap
+swapon --show</code></pre>
+<div class="callout note"><div class="callout-title">RHEL 9 vs RHEL 10</div><p>This workflow is identical on both releases. The version difference is not in the LVM verbs; it is in the surrounding platform. Keep your recovery media aligned with the installed major release before changing storage.</p></div>

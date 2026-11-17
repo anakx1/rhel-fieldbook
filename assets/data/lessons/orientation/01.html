@@ -1,0 +1,9 @@
+<p>Linux is a <strong>kernel</strong>: the part of the system that talks to hardware, schedules processes, manages memory, and enforces isolation. The kernel on its own is not something you sit down and administer. It needs a userland — shells, libraries, package tools, services, configuration files — stacked on top.</p>
+        <p>A <strong>distribution</strong> is a curated bundle of that kernel and userland, with opinions about how it should be installed, updated, secured, and supported. <strong>Red Hat Enterprise Linux</strong> is a distribution built for organizations that need a predictable platform: long support windows, certified hardware and software, stable interfaces, and a vendor to call when something breaks at 02:00.</p>
+        <p>You will hear three layers named constantly:</p>
+        <ul>
+          <li><strong>Kernel</strong> — hardware, processes, memory, filesystems, networking primitives.</li>
+          <li><strong>Userland</strong> — the programs and libraries you actually invoke: <code>bash</code>, <code>systemd</code>, <code>dnf</code>, <code>sshd</code>, <code>firewalld</code>.</li>
+          <li><strong>Distribution</strong> — the policy that binds them: release cadence, defaults, security posture, package repositories, support lifecycle.</li>
+        </ul>
+        <p>An administrator works mostly in the second and third layers. The kernel matters when it leaks, panics, or refuses to see a disk — and then you will be very glad it is documented.</p>

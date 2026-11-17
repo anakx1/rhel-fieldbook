@@ -1,0 +1,8 @@
+<p>CPU and memory questions are usually about trends, not a single snapshot. <code>top</code> shows live processes sorted by CPU; press <code>M</code> to sort by memory, <code>P</code> by CPU, and <code>q</code> to quit. <code>free -h</code> shows memory and swap; <code>vmstat 1</code> shows runnable processes, blocked processes, swap activity, and I/O over time.</p>
+        <div class="code-label"><span>terminal · resource snapshot</span></div>
+        <pre><code>uptime
+free -h
+vmstat 1 5
+systemd-cgtop</code></pre>
+        <p><code>systemd-cgtop</code> groups resource use by control group, which is often more useful than a flat process list. A service is a cgroup; its memory and CPU are managed as a unit. <code>systemctl status service</code> also shows the service's main PID and recent log lines.</p>
+        <p>Do not confuse <strong>load average</strong> with CPU percentage. Load counts runnable and uninterruptible processes. A load of 8 on an 8-core system can be saturated; a load of 8 on a 2-core system is heavily oversubscribed. On Linux, high load can also mean processes stuck in <code>D</code> state waiting for disk.</p>

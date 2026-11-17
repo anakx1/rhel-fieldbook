@@ -1,0 +1,169 @@
+{
+  "id": "users",
+  "module": "m02",
+  "title": "Users, groups, and sudo",
+  "subtitle": "Identity is the foundation of every permission decision on the system.",
+  "minutes": 28,
+  "difficulty": "Core",
+  "tags": [
+    "users",
+    "groups",
+    "sudo",
+    "passwd",
+    "identity"
+  ],
+  "objectives": [
+    "Read the passwd and shadow identity files",
+    "Create, modify, lock, and remove user accounts",
+    "Manage group membership correctly",
+    "Grant delegated privilege with sudo and sudoers drop-ins",
+    "Explain the difference between su and sudo"
+  ],
+  "sections": [
+    {
+      "title": "Identity is a number",
+      "file": "01.html"
+    },
+    {
+      "title": "Create and modify accounts",
+      "file": "02.html"
+    },
+    {
+      "title": "sudo is a policy engine",
+      "file": "03.html"
+    },
+    {
+      "title": "Account hygiene",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "id",
+      "desc": "Show the current UID, GID, and group memberships.",
+      "category": "Identity"
+    },
+    {
+      "cmd": "getent passwd user",
+      "desc": "Query a user through the name service.",
+      "category": "Identity"
+    },
+    {
+      "cmd": "getent group wheel",
+      "desc": "Query group membership.",
+      "category": "Identity"
+    },
+    {
+      "cmd": "sudo useradd -m -s /bin/bash analyst",
+      "desc": "Create a user with a home and Bash shell.",
+      "category": "Identity"
+    },
+    {
+      "cmd": "sudo passwd analyst",
+      "desc": "Set or change a user password.",
+      "category": "Identity"
+    },
+    {
+      "cmd": "sudo groupadd engineering",
+      "desc": "Create a group.",
+      "category": "Identity"
+    },
+    {
+      "cmd": "sudo usermod -aG engineering analyst",
+      "desc": "Append a supplementary group membership.",
+      "category": "Identity"
+    },
+    {
+      "cmd": "sudo userdel -r analyst",
+      "desc": "Remove a user and home directory. Destructive.",
+      "category": "Identity"
+    },
+    {
+      "cmd": "sudo -l",
+      "desc": "List sudo privileges for the current user.",
+      "category": "Identity"
+    },
+    {
+      "cmd": "sudo visudo",
+      "desc": "Safely edit and validate sudoers policy.",
+      "category": "Identity"
+    },
+    {
+      "cmd": "chage -l analyst",
+      "desc": "Show password aging information.",
+      "category": "Identity"
+    }
+  ],
+  "lab": {
+    "title": "Provision a least-privilege operator",
+    "scenario": "Create an account for a junior operator who needs one specific service restart right, not full root.",
+    "minutes": 18,
+    "steps": [
+      {
+        "text": "Create a group and a user with a home directory and Bash shell.",
+        "cmd": "sudo groupadd ops && sudo useradd -m -s /bin/bash analyst && sudo passwd analyst",
+        "verify": "id analyst should show the account and its groups.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Add the user to the ops group without removing existing memberships.",
+        "cmd": "sudo usermod -aG ops analyst && groups analyst",
+        "verify": "groups analyst should include ops plus every group the account already had.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Verify you can query the account through the name service.",
+        "cmd": "getent passwd analyst",
+        "verify": "getent passwd analyst should return the same entry as /etc/passwd.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create a validated sudoers drop-in granting only the httpd restart command.",
+        "cmd": "echo \"%ops ALL=(ALL) /usr/bin/systemctl restart httpd\" | sudo tee /etc/sudoers.d/ops-httpd && sudo chmod 0440 /etc/sudoers.d/ops-httpd",
+        "verify": "Run sudo visudo -c to validate all sudoers files.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Inspect password aging and lock the account when finished.",
+        "cmd": "sudo chage -l analyst && sudo passwd -l analyst",
+        "verify": "chage -l should show the aging policy, and passwd -l should add a locked marker.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which command adds analyst to the engineering group without removing other supplementary groups?",
+      "options": [
+        "usermod -G engineering analyst",
+        "usermod -aG engineering analyst",
+        "groupmod -a analyst engineering",
+        "useradd -G engineering analyst"
+      ],
+      "answer": 1,
+      "why": "-aG appends. -G alone replaces the supplementary group list and can silently remove access."
+    },
+    {
+      "q": "Where are password hashes stored on a default RHEL system?",
+      "options": [
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/shadow",
+        "/var/log/secure"
+      ],
+      "answer": 2,
+      "why": "/etc/shadow is restricted to root. /etc/passwd contains an x placeholder in the password field."
+    },
+    {
+      "q": "Why should sudoers be edited with visudo or a validated drop-in?",
+      "options": [
+        "It compresses the file",
+        "A syntax error can break privilege escalation",
+        "It encrypts passwords",
+        "It removes audit logging"
+      ],
+      "answer": 1,
+      "why": "visudo validates syntax before committing. A malformed sudoers file can lock out administrative access."
+    }
+  ]
+}

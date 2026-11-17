@@ -1,0 +1,22 @@
+<p>There are two ways to set a mode, and both are worth knowing. Octal is compact and precise. Symbolic is readable and good for targeted changes.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Octal</th><th>Symbolic</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>640</code></td><td><code>u=rw,g=r,o=</code></td><td>Owner read/write, group read, others none.</td></tr>
+              <tr><td><code>750</code></td><td><code>u=rwx,g=rx,o=</code></td><td>Owner full, group read/execute, others none.</td></tr>
+              <tr><td><code>755</code></td><td><code>u=rwx,go=rx</code></td><td>Common for executables and public directories.</td></tr>
+              <tr><td><code>644</code></td><td><code>u=rw,go=r</code></td><td>Common for regular files.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="code-label"><span>terminal · chmod patterns</span></div>
+        <pre><code>chmod 640 report.txt
+chmod u+x deploy.sh
+chmod g-w,o= report.txt
+chmod -R 750 ~/lab/fieldbook</code></pre>
+        <p>The <code>-R</code> flag is powerful and blunt. Recursively applying <code>chmod 755</code> to a tree can make private files world-readable and remove execute bits from directories that need them. Preview with <code>find</code> first, then apply deliberately.</p>
+        <div class="callout warn">
+          <div class="callout-title">Do not chmod 777</div>
+          <p>It does not "fix permissions." It grants every local account write access and hides the real ownership or group problem. Fix the group, use an ACL, or set the correct mode.</p>
+        </div>

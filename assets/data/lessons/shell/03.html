@@ -1,0 +1,12 @@
+<p>Typing is not the skill. Navigation is. These are the shortcuts worth making automatic:</p>
+        <ul>
+          <li><strong>Tab</strong> — complete a command, path, or argument. Press twice to list possibilities. Use it constantly.</li>
+          <li><strong>↑ / ↓</strong> — walk through command history.</li>
+          <li><strong>Ctrl+R</strong> — reverse-search history. Type a fragment of an old command.</li>
+          <li><strong>Ctrl+A / Ctrl+E</strong> — jump to the beginning or end of the line.</li>
+          <li><strong>Ctrl+U / Ctrl+K</strong> — delete left or right of the cursor.</li>
+          <li><strong>Ctrl+C</strong> — interrupt the foreground process. This is not "close the terminal"; it sends SIGINT.</li>
+          <li><strong>Ctrl+L</strong> — clear the screen while keeping your command line.</li>
+        </ul>
+        <p><code>history</code> shows numbered commands. <code>!!</code> re-runs the last command, and <code>sudo !!</code> is the classic "I forgot sudo" recovery. Be careful with history expansion: confirm what <code>!!</code> will run before pressing Enter, especially after a destructive command.</p>
+        <p>Use <code>clear</code> when output is noisy, but do not confuse a clean screen with a fresh shell. The scrollback is still there, and your environment has not changed.</p>

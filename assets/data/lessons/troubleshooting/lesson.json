@@ -1,0 +1,168 @@
+{
+  "id": "troubleshooting",
+  "module": "m04",
+  "title": "A calm triage method",
+  "subtitle": "Gather evidence, narrow the blast radius, change one thing at a time.",
+  "minutes": 28,
+  "difficulty": "Core",
+  "tags": [
+    "troubleshooting",
+    "journalctl",
+    "incident",
+    "logs",
+    "method"
+  ],
+  "objectives": [
+    "Apply a repeatable triage method under pressure",
+    "Run a first-pass health check in the right order",
+    "Match common symptoms to the most useful evidence",
+    "Avoid random changes that destroy the evidence trail",
+    "Write a clear escalation with timeline and impact"
+  ],
+  "sections": [
+    {
+      "title": "The method beats the memorized command",
+      "file": "01.html"
+    },
+    {
+      "title": "The first ten checks",
+      "file": "02.html"
+    },
+    {
+      "title": "Symptoms and their first evidence",
+      "file": "03.html"
+    },
+    {
+      "title": "Escalate with a timeline, not a vibe",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "uptime -p",
+      "desc": "Show a concise uptime summary.",
+      "category": "Troubleshooting"
+    },
+    {
+      "cmd": "systemctl list-units --state=failed",
+      "desc": "List units that failed to start.",
+      "category": "Troubleshooting"
+    },
+    {
+      "cmd": "journalctl -p err -b --no-pager",
+      "desc": "Show error-priority messages from this boot.",
+      "category": "Troubleshooting"
+    },
+    {
+      "cmd": "df -hT -x tmpfs",
+      "desc": "Check filesystem capacity and type.",
+      "category": "Troubleshooting"
+    },
+    {
+      "cmd": "df -i /",
+      "desc": "Check inode exhaustion on the root filesystem.",
+      "category": "Troubleshooting"
+    },
+    {
+      "cmd": "free -h -w",
+      "desc": "Check memory and swap pressure.",
+      "category": "Troubleshooting"
+    },
+    {
+      "cmd": "ip -br addr",
+      "desc": "Show a compact interface and address summary.",
+      "category": "Troubleshooting"
+    },
+    {
+      "cmd": "ss -tulpn state listening",
+      "desc": "List listening sockets and owning processes.",
+      "category": "Troubleshooting"
+    },
+    {
+      "cmd": "namei -l /path",
+      "desc": "Trace permissions on every path component.",
+      "category": "Troubleshooting"
+    },
+    {
+      "cmd": "sudo ausearch -m AVC -ts today",
+      "desc": "Find recent SELinux denials.",
+      "category": "Troubleshooting"
+    },
+    {
+      "cmd": "sudo dnf history",
+      "desc": "Review recent package changes.",
+      "category": "Troubleshooting"
+    }
+  ],
+  "lab": {
+    "title": "Run a calm first pass",
+    "scenario": "Perform a non-destructive health assessment and write a three-line situation report from the evidence.",
+    "minutes": 15,
+    "steps": [
+      {
+        "text": "Capture system identity, uptime, and load.",
+        "cmd": "hostnamectl && uptime",
+        "verify": "The output should identify the host, its uptime, and the current load averages."
+      },
+      {
+        "text": "List failed units and recent error-priority journal entries.",
+        "cmd": "systemctl --failed; journalctl -p err -b --no-pager | tail -n 20",
+        "verify": "The failed-unit list should be empty or explain the failure; the journal should show recent errors."
+      },
+      {
+        "text": "Check capacity, inodes, and memory.",
+        "cmd": "df -hT; df -i; free -h",
+        "verify": "No filesystem should be near 100 percent; note inode use and available memory."
+      },
+      {
+        "text": "Check addresses, routes, and listening sockets.",
+        "cmd": "ip -br addr; ip route; sudo ss -tulpn",
+        "verify": "Confirm the interface, the default route, and the listening ports."
+      },
+      {
+        "text": "Review the last package transactions for recent change.",
+        "cmd": "sudo dnf history | head -n 10",
+        "verify": "dnf history should show the most recent transactions and their dates."
+      },
+      {
+        "text": "Write a three-line report: impact, evidence, next action. Keep it factual and time-stamped.",
+        "verify": "If nothing is wrong, say so and include the evidence you checked."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "A service is failing. What should you capture before restarting it?",
+      "options": [
+        "Only the exit code",
+        "Status, logs, and resource state",
+        "A new screenshot of the desktop",
+        "The package list only"
+      ],
+      "answer": 1,
+      "why": "Restarting can clear the state that explains the failure. Capture status and logs first when safe."
+    },
+    {
+      "q": "df shows free blocks but writes fail. What is the next check?",
+      "options": [
+        "df -i for inode exhaustion",
+        "ping the gateway",
+        "systemctl restart sshd",
+        "firewall-cmd --reload"
+      ],
+      "answer": 0,
+      "why": "A filesystem can run out of inodes while blocks remain free. df -i confirms it."
+    },
+    {
+      "q": "Why change only one thing at a time during triage?",
+      "options": [
+        "It is faster to type",
+        "It preserves causality and prevents new problems",
+        "It avoids using sudo",
+        "It disables SELinux"
+      ],
+      "answer": 1,
+      "why": "Multiple simultaneous changes make it impossible to know what worked or what broke."
+    }
+  ]
+}

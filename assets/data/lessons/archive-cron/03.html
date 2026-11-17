@@ -1,0 +1,13 @@
+<p>Cron is simple and universal. Timers are supervised and observable. Choose deliberately.</p>
+<div class="table-wrap"><table><thead><tr><th>Need</th><th>Cron</th><th>systemd timer</th></tr></thead><tbody>
+<tr><td>Per-user quick schedule</td><td>Simple</td><td>User units add structure</td></tr>
+<tr><td>Missed run after boot</td><td>Depends on anacron</td><td><code>Persistent=true</code></td></tr>
+<tr><td>Journal and dependency integration</td><td>Manual logging</td><td>Native</td></tr>
+<tr><td>Randomized delay</td><td>Manual sleep</td><td><code>RandomizedDelaySec</code></td></tr>
+</tbody></table></div>
+<div class="code-label"><span>verify either path</span></div>
+<pre><code>crontab -l
+systemctl list-timers --all
+journalctl -u crond --since today --no-pager</code></pre>
+<p>Whichever scheduler you use, test the payload manually first, make it exit non-zero on failure, and keep evidence. A scheduled job that never ran is harder to spot than one that failed loudly.</p>
+<div class="callout note"><div class="callout-title">RHEL 9 vs RHEL 10</div><p>cronie and crontab behave the same on both releases. RHEL 10 still supports cron; timers remain the better default for system services that need supervision and journal evidence.</p></div>

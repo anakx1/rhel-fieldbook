@@ -1,0 +1,7 @@
+<p>SSH key authentication replaces a shared secret with a pair: the private key stays on the client, and the public key is installed on the server. The server proves the client holds the private key without ever sending it across the network.</p>
+<div class="code-label"><span>terminal · create and install a key</span></div>
+<pre><code>ssh-keygen -t ed25519 -a 100 -C "$USER@$(hostname)"
+ssh-copy-id -i ~/.ssh/id_ed25519.pub student@rhel-lab.example.com
+ssh student@rhel-lab.example.com</code></pre>
+<p>The default files are <code>~/.ssh/id_ed25519</code> and <code>~/.ssh/id_ed25519.pub</code>. The public file is safe to copy. The private file must never leave the client or be committed to a repository.</p>
+<p>A passphrase protects the private key at rest. In automation, use an agent or a dedicated deployment key with a narrow purpose instead of an unencrypted personal key.</p>

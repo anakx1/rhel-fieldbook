@@ -1,0 +1,14 @@
+<p>An application can be running but not listening where you expect. <code>ss</code> is the modern socket inspector:</p>
+        <div class="code-label"><span>terminal · listening sockets</span></div>
+        <pre><code>ss -tulpn
+ss -tan state established
+ss -tlnp | grep :22</code></pre>
+        <p><code>-t</code> TCP, <code>-u</code> UDP, <code>-l</code> listening, <code>-n</code> numeric ports, <code>-p</code> process. The process column requires privilege for sockets owned by other users. A service bound only to <code>127.0.0.1</code> will not accept remote connections even if the port is open locally.</p>
+        <p>DNS is a frequent culprit. Test resolution separately from reachability:</p>
+        <div class="code-label"><span>terminal · resolution and reachability</span></div>
+        <pre><code>getent hosts server.example.com
+cat /etc/resolv.conf
+ping -c 3 192.0.2.50
+curl -I http://server.example.com</code></pre>
+        <p><code>getent hosts</code> uses the system's name service switch, which is what applications actually use. <code>dig</code> or <code>host</code> queries DNS directly but may not reflect <code>/etc/hosts</code> or other name service sources. Test with the same mechanism the application uses.</p>
+        <p><code>ping</code> proves ICMP reachability, not application health. A host can block ICMP and still serve HTTP. <code>curl -I</code> checks the application layer; <code>ss</code> checks the listener; <code>ip route</code> checks the path. Use the layer that matches the symptom.</p>

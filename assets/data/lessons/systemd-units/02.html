@@ -1,0 +1,19 @@
+<p>A service unit has three useful sections. <code>[Unit]</code> describes identity, ordering, and dependencies. <code>[Service]</code> describes how to run the process. <code>[Install]</code> describes how enabling the unit attaches it to a target.</p>
+<div class="code-label"><span>/etc/systemd/system/fieldbook.service</span></div>
+<pre><code>[Unit]
+Description=Fieldbook health reporter
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fieldbook-report
+User=root
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+<p><code>Type=oneshot</code> is right for a command that runs and exits. A long-running daemon normally uses <code>Type=simple</code> or <code>Type=notify</code>. Use absolute paths in <code>ExecStart</code>; systemd does not inherit your interactive shell aliases or working directory. Add <code>Restart=on-failure</code> only when restarting is actually safe.</p>
+<div class="code-label"><span>unit locations</span></div>
+<pre><code>/usr/lib/systemd/system/     package-owned units
+/etc/systemd/system/         local units and drop-ins
+/etc/systemd/system/foo.service.d/*.conf   local overrides</code></pre>
+<p>Do not edit package-owned units when a drop-in will do. <code>systemctl edit</code> creates a drop-in that survives package upgrades.</p>

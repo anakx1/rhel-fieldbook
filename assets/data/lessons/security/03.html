@@ -1,0 +1,20 @@
+<p>SSH is the front door. A small configuration change has outsized impact, so validate before restarting and keep a console path.</p>
+        <div class="code-label"><span>/etc/ssh/sshd_config.d/10-baseline.conf</span></div>
+        <pre><code>PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+MaxAuthTries 3
+X11Forwarding no</code></pre>
+        <p>Disabling password authentication requires working key-based access first. Test with a second session before closing your current one. Validate the syntax with <code>sshd -t</code>, then reload:</p>
+        <div class="code-label"><span>terminal · validate SSH config</span></div>
+        <pre><code>sudo sshd -t
+sudo systemctl reload sshd
+ssh -o BatchMode=yes student@localhost true</code></pre>
+        <p>On RHEL 9+, drop-in files under <code>/etc/ssh/sshd_config.d/</code> are included by the main configuration. Use them for local policy instead of editing the vendor file, which makes upgrades and audits easier.</p>
+        <p>Keep the firewall enabled and expose only required services. Verify listening sockets, then confirm the zone:</p>
+        <div class="code-label"><span>terminal · expose only what is needed</span></div>
+        <pre><code>sudo ss -tulpn
+sudo firewall-cmd --list-all
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload</code></pre>
+        <p>Patch discipline is part of the baseline. Subscribe, test, and update deliberately. A server that has not received security updates in a year is not "stable"; it is unmaintained.</p>

@@ -1,0 +1,35 @@
+<p>Bash conditions use <code>[[ ... ]]</code> for strings and files, and arithmetic expressions for numbers.</p>
+        <div class="code-label"><span>conditionals</span></div>
+        <pre><code>#!/bin/bash
+set -euo pipefail
+
+file="${1:-/etc/os-release}"
+
+if [[ ! -r "$file" ]]; then
+  echo "cannot read: $file" &gt;&amp;2
+  exit 1
+fi
+
+if [[ -s "$file" ]]; then
+  echo "file has content: $file"
+fi
+
+load=$(cut -d' ' -f1 /proc/loadavg)
+if (( load &gt; 4 )); then
+  echo "load is elevated: $load"
+fi</code></pre>
+        <p>Common file tests: <code>-e</code> exists, <code>-f</code> regular file, <code>-d</code> directory, <code>-r</code> readable, <code>-s</code> non-empty. String tests: <code>==</code>, <code>!=</code>, <code>-z</code> empty. Numeric comparisons inside <code>(( ))</code> use <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, and so on.</p>
+        <p>Loops process collections without copy-paste:</p>
+        <div class="code-label"><span>loops</span></div>
+        <pre><code>for unit in sshd chronyd firewalld; do
+  if systemctl is-active --quiet "$unit"; then
+    echo "OK   $unit"
+  else
+    echo "FAIL $unit"
+  fi
+done</code></pre>
+        <p>Prefer reading command output rather than parsing human-oriented tables. Use <code>systemctl is-active --quiet</code> for a clean exit status; do not grep the output of <code>systemctl status</code>, which is designed for people and changes between versions.</p>
+        <div class="callout note">
+          <div class="callout-title">Exit codes are the API</div>
+          <p>A script should return <code>0</code> on success and non-zero on failure. Automation depends on this. Printing "ERROR" but exiting 0 is a lie that breaks pipelines.</p>
+        </div>

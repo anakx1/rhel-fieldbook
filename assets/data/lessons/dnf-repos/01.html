@@ -1,0 +1,10 @@
+<p>A repository is a signed statement that packages came from a source you trust. Enable too many and you lose provenance; enable the wrong one and you install a package that looks correct but is unsupported.</p>
+<div class="code-label"><span>/etc/yum.repos.d/fieldbook.repo</span></div>
+<pre><code>[fieldbook]
+name=Fieldbook local packages
+baseurl=https://repo.example.com/rhel/9/$basearch/
+enabled=1
+gpgcheck=1
+gpgkey=https://repo.example.com/RPM-GPG-KEY-fieldbook</code></pre>
+<p><code>gpgcheck=1</code> is the default expectation. If a repository cannot provide a key, treat that as a design problem, not an inconvenience to bypass. Use <code>dnf repolist -v</code> and <code>dnf info</code> to verify where a package resolves.</p>
+<div class="callout warn"><div class="callout-title">Do not disable GPG checking to make an error disappear</div><p>A signature failure means the package or metadata is not what the repository promised. Fix trust, not the check.</p></div>

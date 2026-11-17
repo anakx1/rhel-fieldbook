@@ -1,0 +1,20 @@
+<p>Assignment has no spaces around the equals sign. Expansion uses <code>$</code>. Quotes control how much the shell interprets.</p>
+        <div class="code-label"><span>variables and quoting</span></div>
+        <pre><code>name="RHEL Fieldbook"
+count=3
+echo "$name"
+echo 'single quotes keep $name literal'
+echo "two plus three is $((2 + 3))"</code></pre>
+        <p>Always quote variable expansions unless you have a specific reason not to: <code>"$file"</code>, not <code>$file</code>. Unquoted expansions undergo word splitting and globbing, so a filename with a space can become two arguments and a filename with <code>*</code> can expand unexpectedly.</p>
+        <p>Script arguments are available as positional parameters:</p>
+        <div class="code-label"><span>arguments</span></div>
+        <pre><code>#!/bin/bash
+set -euo pipefail
+echo "script: $0"
+echo "first: ${1:-no argument}"
+echo "count: $#"
+for arg in "$@"; do
+  echo "arg: $arg"
+done</code></pre>
+        <p><code>"$@"</code> preserves each argument as a separate word. <code>"$*"</code> joins them into one string. The difference matters the moment a filename contains a space. Use <code>"$@"</code> as the default.</p>
+        <p>Command substitution captures output: <code>today=$(date +%F)</code>. Avoid backticks in new scripts; <code>$(...)</code> nests cleanly and is easier to read.</p>

@@ -1,0 +1,136 @@
+{
+  "id": "orientation",
+  "module": "m01",
+  "title": "Meet RHEL",
+  "subtitle": "What enterprise Linux actually is, how to get a safe lab, and the map for everything that follows.",
+  "minutes": 18,
+  "difficulty": "Starter",
+  "tags": [
+    "RHEL",
+    "Linux",
+    "lifecycle",
+    "lab"
+  ],
+  "objectives": [
+    "Explain the relationship between Linux, a distribution, and RHEL",
+    "Identify a RHEL release from the system itself",
+    "Describe why RHEL is built and supported differently from a hobby distro",
+    "Choose a safe practice environment and take a snapshot",
+    "See how this level maps to real administration work and RHCSA objectives"
+  ],
+  "sections": [
+    {
+      "title": "Linux is a stack, not a single product",
+      "file": "01.html"
+    },
+    {
+      "title": "What makes RHEL different",
+      "file": "02.html"
+    },
+    {
+      "title": "Meet the machine in front of you",
+      "file": "03.html"
+    },
+    {
+      "title": "Build a lab you are allowed to break",
+      "file": "04.html"
+    },
+    {
+      "title": "How this fieldbook works",
+      "file": "05.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "cat /etc/redhat-release",
+      "desc": "Show the short RHEL release string.",
+      "category": "Orientation"
+    },
+    {
+      "cmd": "cat /etc/os-release",
+      "desc": "Show structured operating system identity.",
+      "category": "Orientation"
+    },
+    {
+      "cmd": "uname -r",
+      "desc": "Print the running kernel release.",
+      "category": "Orientation"
+    },
+    {
+      "cmd": "hostnamectl",
+      "desc": "Show hostname, OS, kernel, architecture, and virtualization.",
+      "category": "Orientation"
+    },
+    {
+      "cmd": "dnf --version",
+      "desc": "Identify the DNF generation in use.",
+      "category": "Packages"
+    }
+  ],
+  "lab": {
+    "title": "Identify and snapshot your lab",
+    "scenario": "Establish a baseline before you change anything. In a real incident, these are the first facts you collect.",
+    "minutes": 12,
+    "steps": [
+      {
+        "text": "Boot your RHEL lab VM or connect to your cloud instance. Confirm you are on the intended host.",
+        "cmd": "hostnamectl",
+        "verify": "Verify the hostname, operating system, and kernel are what you expect."
+      },
+      {
+        "text": "Read the short and structured release files. Note the major version.",
+        "cmd": "cat /etc/redhat-release && cat /etc/os-release",
+        "verify": "Both files should identify Red Hat Enterprise Linux 9.x and agree on the major version."
+      },
+      {
+        "text": "Check the kernel and CPU architecture.",
+        "cmd": "uname -r && uname -m",
+        "verify": "uname -r prints the kernel release and uname -m prints x86_64 on a standard lab VM."
+      },
+      {
+        "text": "Confirm the package manager generation.",
+        "cmd": "dnf --version",
+        "verify": "dnf --version should report dnf 4.x, confirming the RPM package stack."
+      },
+      {
+        "text": "Take a hypervisor or cloud snapshot named clean-install. If you cannot snapshot, record how you would rebuild the machine.",
+        "verify": "You should be able to return to this exact state after a failed lab."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which file gives the short, human-readable RHEL release string?",
+      "options": [
+        "/etc/os-release",
+        "/etc/redhat-release",
+        "/etc/kernel-release",
+        "/var/log/redhat"
+      ],
+      "answer": 1,
+      "why": "/etc/redhat-release is the traditional short string. /etc/os-release is the structured, cross-distribution file."
+    },
+    {
+      "q": "What is the main reason an organization chooses RHEL over a fast-moving hobby distribution?",
+      "options": [
+        "It has no package manager",
+        "It never receives updates",
+        "It offers a predictable, supported lifecycle and certified ecosystem",
+        "It disables the kernel"
+      ],
+      "answer": 2,
+      "why": "RHEL trades speed for stability, support, certification, and a defined lifecycle — not for immutability."
+    },
+    {
+      "q": "What should you do before a networking or boot lab?",
+      "options": [
+        "Disable SELinux first",
+        "Take a snapshot of the clean system",
+        "Delete /var/log",
+        "Switch to the root account permanently"
+      ],
+      "answer": 1,
+      "why": "A snapshot is the fastest reliable undo. Disabling security controls first teaches the wrong habit."
+    }
+  ]
+}

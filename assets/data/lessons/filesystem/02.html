@@ -1,0 +1,21 @@
+<p>The Filesystem Hierarchy Standard (FHS) is the shared map. You do not need to memorize every directory, but you do need to know where configuration, state, and user data belong.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Directory</th><th>What lives there</th><th>Why you care</th></tr></thead>
+            <tbody>
+              <tr><td><code>/etc</code></td><td>Host-specific configuration</td><td>Most service configuration and identity files.</td></tr>
+              <tr><td><code>/var</code></td><td>Variable data: logs, spool, caches, databases</td><td>The first place to check when a disk fills.</td></tr>
+              <tr><td><code>/home</code></td><td>Regular user home directories</td><td>User data and personal shell configuration.</td></tr>
+              <tr><td><code>/root</code></td><td>Root's home directory</td><td>Not the same as <code>/</code>.</td></tr>
+              <tr><td><code>/usr</code></td><td>Installed software, libraries, documentation</td><td>Read-only operating system content.</td></tr>
+              <tr><td><code>/opt</code></td><td>Optional third-party application trees</td><td>Vendor software that brings its own layout.</td></tr>
+              <tr><td><code>/tmp</code></td><td>Temporary files</td><td>Often cleared on reboot; never store important data.</td></tr>
+              <tr><td><code>/boot</code></td><td>Kernel and bootloader files</td><td>Critical to boot; treat with respect.</td></tr>
+              <tr><td><code>/dev</code></td><td>Device nodes</td><td>Disks, terminals, and pseudo-devices.</td></tr>
+              <tr><td><code>/proc</code>, <code>/sys</code></td><td>Kernel and hardware interfaces</td><td>Live, virtual views — not ordinary files.</td></tr>
+              <tr><td><code>/mnt</code>, <code>/media</code></td><td>Temporary and removable mount points</td><td>Conventional places to attach filesystems.</td></tr>
+              <tr><td><code>/srv</code></td><td>Data served by the system</td><td>Optional but conventional for service content.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>On modern RHEL, <code>/bin</code>, <code>/sbin</code>, and <code>/lib</code> are symbolic links into <code>/usr</code>. This is the <strong>usrmerge</strong> layout. It is why <code>/bin/bash</code> and <code>/usr/bin/bash</code> resolve to the same program.</p>

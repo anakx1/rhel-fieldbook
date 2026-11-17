@@ -1,0 +1,8 @@
+<p>Changing networking over SSH can cut your own connection. In a lab, use the console. The pattern is: inspect, modify, bring up, verify.</p>
+        <div class="code-label"><span>terminal · static IPv4 profile</span></div>
+        <pre><code>nmcli connection show "Wired connection 1"
+sudo nmcli connection modify "Wired connection 1"   ipv4.method manual   ipv4.addresses 192.0.2.50/24   ipv4.gateway 192.0.2.1   ipv4.dns 192.0.2.53
+sudo nmcli connection up "Wired connection 1"
+ip addr show</code></pre>
+        <p>For DHCP, set <code>ipv4.method auto</code> and clear the manual addresses. <code>nmcli connection modify</code> changes the stored profile; <code>connection up</code> applies it. You can also use <code>nmcli device reapply</code> for some changes without a full reconnect, but a lab is the place to learn the difference.</p>
+        <p>Hostname identity is separate from IP addressing. Use <code>hostnamectl hostname rhel01.example.com</code> to set the static hostname, and ensure DNS or <code>/etc/hosts</code> can resolve it.</p>

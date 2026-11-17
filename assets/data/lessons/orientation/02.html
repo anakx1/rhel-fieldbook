@@ -1,0 +1,18 @@
+<p>RHEL is deliberately conservative. Features arrive later than in Fedora, but they arrive with a lifecycle, a support statement, and a migration path. That trade is the entire point.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Concern</th><th>What RHEL optimizes for</th></tr></thead>
+            <tbody>
+              <tr><td>Stability</td><td>Stable major-version interfaces. Security fixes are backported instead of forcing a disruptive upgrade.</td></tr>
+              <tr><td>Lifecycle</td><td>A published support window measured in years, with defined maintenance and extended-life phases.</td></tr>
+              <tr><td>Ecosystem</td><td>Certified hardware, ISV applications, cloud images, and a partner catalog.</td></tr>
+              <tr><td>Security</td><td>SELinux enforcing by default, signed packages, crypto policies, and a compliance story.</td></tr>
+              <tr><td>Operations</td><td>Predictable defaults, automation-friendly tooling, and enterprise support channels.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>RHEL is not "the only Linux." Fedora is its fast-moving upstream community project. <strong>CentOS Stream</strong> is the rolling preview that sits directly upstream of the next RHEL minor release. Rebuilds such as Rocky Linux and AlmaLinux track RHEL source and are excellent for practice, but they are not identical products and do not include Red Hat support.</p>
+        <div class="callout note">
+          <div class="callout-title">Read the release, not the meme</div>
+          <p>Commands differ subtly across versions. RHEL 9 and RHEL 10 both use systemd, SELinux, and the same administration model, but RHEL 10 moves to DNF5, newer container tooling, and a different default crypto posture. In this fieldbook, commands are written to work on both unless a version difference is called out.</p>
+        </div>

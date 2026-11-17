@@ -1,0 +1,16 @@
+<p>When something fails, resist the urge to open a giant file and scroll. Narrow the question:</p>
+        <ol>
+          <li><strong>When</strong> did it fail? Use <code>journalctl --since</code> or filter timestamps.</li>
+          <li><strong>Which unit or service</strong> is involved? Filter by unit or process.</li>
+          <li><strong>What changed</strong> just before? Look at the last successful event and the first error.</li>
+          <li><strong>What is the exact error</strong>? Copy the first meaningful line, not the last cascading symptom.</li>
+        </ol>
+        <div class="code-label"><span>terminal · narrow the window</span></div>
+        <pre><code>journalctl -u sshd --since "1 hour ago"
+journalctl -p err -b
+grep -i "failed|denied" /var/log/secure | tail -n 20</code></pre>
+        <p>The backslash in <code>failed|denied</code> is basic regular expression alternation. With <code>grep -E</code>, write it as <code>"failed|denied"</code>. Either way, quote the pattern so the shell does not interpret the pipe.</p>
+        <div class="callout tip">
+          <div class="callout-title">Copy the raw evidence</div>
+          <p>When escalating, include the exact command, timestamp, host, and unedited error. A screenshot cropped to one red line is not evidence.</p>
+        </div>

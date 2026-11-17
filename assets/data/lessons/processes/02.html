@@ -1,0 +1,20 @@
+<p>Signals are asynchronous notifications to a process. The important ones:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Signal</th><th>Number</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>SIGTERM</code></td><td>15</td><td>Polite request to terminate. The default for <code>kill</code>.</td></tr>
+              <tr><td><code>SIGINT</code></td><td>2</td><td>Interrupt from Ctrl+C.</td></tr>
+              <tr><td><code>SIGHUP</code></td><td>1</td><td>Hangup; often used to ask a daemon to reload configuration.</td></tr>
+              <tr><td><code>SIGKILL</code></td><td>9</td><td>Immediate, unblockable termination. No cleanup.</td></tr>
+              <tr><td><code>SIGSTOP</code></td><td>19</td><td>Pause a process. Cannot be caught or ignored.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="code-label"><span>terminal · terminate with escalating force</span></div>
+        <pre><code>kill -TERM 4242
+kill 4242
+kill -9 4242
+pkill -TERM -u analyst sleep</code></pre>
+        <p>Always try <code>SIGTERM</code> first. It gives the process a chance to flush buffers, close files, and release locks. <code>SIGKILL</code> is for a process that is genuinely stuck or ignoring termination — it can leave corrupted state or stale lock files. Killing a database with <code>-9</code> is not a normal maintenance action.</p>
+        <p>Use <code>pkill</code> carefully: it matches broadly. <code>pkill -u analyst sleep</code> is narrower than <code>pkill sleep</code>. Run <code>pgrep -a</code> with the same pattern first to see exactly what would be targeted.</p>

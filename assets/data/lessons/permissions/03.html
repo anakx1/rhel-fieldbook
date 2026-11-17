@@ -1,0 +1,12 @@
+<p>Ownership has two parts: user and group. <code>chown</code> changes both. Only root can give files to another user; a regular user may change group only to a group they belong to.</p>
+        <div class="code-label"><span>terminal · ownership</span></div>
+        <pre><code>sudo chown analyst:engineering report.txt
+sudo chown -R analyst:engineering ~analyst/lab
+ls -l report.txt</code></pre>
+        <p>New files get a default mode modified by the <strong>umask</strong>. The base is <code>666</code> for files and <code>777</code> for directories; the umask is subtracted bitwise (not arithmetic subtraction). A umask of <code>022</code> produces <code>644</code> for files and <code>755</code> for directories.</p>
+        <div class="code-label"><span>terminal · inspect and set umask</span></div>
+        <pre><code>umask
+umask 027
+touch /tmp/umask-demo
+ls -l /tmp/umask-demo</code></pre>
+        <p>A umask of <code>027</code> yields <code>640</code> files and <code>750</code> directories: owner full, group read, others none. Set it in <code>~/.bashrc</code> for a user or <code>/etc/profile.d/</code> for a system-wide policy. Remember that umask only affects newly created objects, not existing ones.</p>

@@ -1,0 +1,12 @@
+<p>On RHEL 9, AppStream modules let one repository expose multiple version streams. You enable a stream before installing the package.</p>
+<div class="code-label"><span>RHEL 9 · module stream workflow</span></div>
+<pre><code>dnf module list php
+sudo dnf module enable php:8.2
+sudo dnf module install php:8.2/default
+dnf module list --installed</code></pre>
+<p>RHEL 10 ships DNF5. Everyday install and remove work, but module handling and configuration commands are not identical to DNF 4. Check <code>dnf --version</code> first, then use the release's own documentation. Do not paste a DNF 4 <code>config-manager</code> command into RHEL 10 and assume it behaves the same.</p>
+<div class="table-wrap"><table><thead><tr><th>Task</th><th>RHEL 9 / DNF 4</th><th>RHEL 10 / DNF 5</th></tr></thead><tbody>
+<tr><td>Version check</td><td><code>dnf --version</code> → 4.x</td><td><code>dnf --version</code> → 5.x</td></tr>
+<tr><td>Repository management</td><td><code>dnf config-manager</code></td><td>Use DNF5-native commands and config files</td></tr>
+<tr><td>Modules</td><td>Full module subcommands</td><td>Different modularity model; verify per package</td></tr>
+</tbody></table></div>

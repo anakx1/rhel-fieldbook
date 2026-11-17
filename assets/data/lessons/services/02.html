@@ -1,0 +1,20 @@
+<p><code>systemctl</code> is the control interface. Use <code>sudo</code> for changes.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>Effect</th></tr></thead>
+            <tbody>
+              <tr><td><code>systemctl start sshd</code></td><td>Start now, do not change boot behavior.</td></tr>
+              <tr><td><code>systemctl enable --now sshd</code></td><td>Enable at boot and start now.</td></tr>
+              <tr><td><code>systemctl restart sshd</code></td><td>Stop then start. Disrupts active connections.</td></tr>
+              <tr><td><code>systemctl reload sshd</code></td><td>Ask the service to reload config if supported. Less disruptive.</td></tr>
+              <tr><td><code>systemctl disable sshd</code></td><td>Remove boot activation. Does not stop the current process.</td></tr>
+              <tr><td><code>systemctl mask sshd</code></td><td>Prevent any start, even by dependency. Stronger than disable.</td></tr>
+              <tr><td><code>systemctl unmask sshd</code></td><td>Remove the mask.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>After editing a unit file, run <code>sudo systemctl daemon-reload</code>. systemd caches unit definitions; without the reload, your changes may not be seen. After changing the unit's <em>configuration file</em>, reload or restart the service itself — those are different layers.</p>
+        <div class="callout warn">
+          <div class="callout-title">Restarting SSH is risky</div>
+          <p>If you are connected over SSH, restarting <code>sshd</code> can drop your session. On modern OpenSSH, existing sessions often survive, but do not bet your only access on it. Keep a console path open.</p>
+        </div>

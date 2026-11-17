@@ -1,0 +1,15 @@
+<p>Most pages share a structure. You do not need to read every line; you need to know where the answer lives.</p>
+        <ul>
+          <li><strong>NAME</strong> — the command and a one-line purpose. Start here.</li>
+          <li><strong>SYNOPSIS</strong> — the grammar. Brackets mean optional, ellipses mean repeatable, and a vertical bar means "or".</li>
+          <li><strong>DESCRIPTION</strong> — what it does and how it thinks.</li>
+          <li><strong>OPTIONS</strong> — flags, often the longest section. Search it with <code>/</code>.</li>
+          <li><strong>FILES</strong> — configuration files that affect behavior.</li>
+          <li><strong>EXAMPLES</strong> — the fastest way to understand intent, though not every page has one.</li>
+          <li><strong>SEE ALSO</strong> — related pages and the next rabbit hole.</li>
+        </ul>
+        <p>Consider this synopsis shape: <code>cp [OPTION]... SOURCE... DEST</code>. The command is <code>cp</code>, options are optional but repeatable, one or more sources are required, and a destination is required. That single line tells you <code>cp file1 file2 dir/</code> is valid.</p>
+        <div class="callout tip">
+          <div class="callout-title">Search before you scroll</div>
+          <p>Inside <code>man</code>, type <code>/-p</code> to jump to the option you need. This is much faster than reading 400 lines of flags.</p>
+        </div>

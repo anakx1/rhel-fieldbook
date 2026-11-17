@@ -1,0 +1,155 @@
+{
+  "id": "files",
+  "module": "m02",
+  "title": "Create, copy, move, remove",
+  "subtitle": "File operations with a safety habit, plus globs, metadata, and archives.",
+  "minutes": 25,
+  "difficulty": "Starter",
+  "tags": [
+    "files",
+    "cp",
+    "mv",
+    "rm",
+    "tar",
+    "globbing"
+  ],
+  "objectives": [
+    "Create files and directory trees without surprises",
+    "Copy, move, and remove files with the right flags",
+    "Inspect metadata with file and stat",
+    "Use shell globs and brace expansion safely",
+    "Create and inspect tar archives"
+  ],
+  "sections": [
+    {
+      "title": "Create first, inspect always",
+      "file": "01.html"
+    },
+    {
+      "title": "Copy, move, remove — with intent",
+      "file": "02.html"
+    },
+    {
+      "title": "Globs and brace expansion",
+      "file": "03.html"
+    },
+    {
+      "title": "Archives: pack a tree, verify the pack",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "mkdir -p ~/lab/{notes,logs}",
+      "desc": "Create a directory tree, including parents.",
+      "category": "Files"
+    },
+    {
+      "cmd": "touch file.txt",
+      "desc": "Create an empty file or update timestamps.",
+      "category": "Files"
+    },
+    {
+      "cmd": "file file.txt",
+      "desc": "Identify content type from magic bytes.",
+      "category": "Files"
+    },
+    {
+      "cmd": "stat file.txt",
+      "desc": "Show inode, size, mode, and timestamps.",
+      "category": "Files"
+    },
+    {
+      "cmd": "cp -a source backup",
+      "desc": "Copy recursively while preserving metadata.",
+      "category": "Files"
+    },
+    {
+      "cmd": "mv old new",
+      "desc": "Rename or relocate a file.",
+      "category": "Files"
+    },
+    {
+      "cmd": "rm -ri directory",
+      "desc": "Remove recursively with confirmation prompts.",
+      "category": "Files"
+    },
+    {
+      "cmd": "tar -czf backup.tar.gz -C ~/lab notes",
+      "desc": "Create a gzip-compressed tar archive.",
+      "category": "Files"
+    },
+    {
+      "cmd": "tar -tzf backup.tar.gz",
+      "desc": "List an archive without extracting it.",
+      "category": "Files"
+    }
+  ],
+  "lab": {
+    "title": "Build, inspect, archive, restore",
+    "scenario": "Practice a complete file lifecycle. The restore step is what proves the backup actually worked.",
+    "minutes": 16,
+    "steps": [
+      {
+        "text": "Create a project tree with three subdirectories.",
+        "cmd": "mkdir -p ~/lab/fieldbook/{notes,logs,archive}",
+        "verify": "ls -R ~/lab/fieldbook should show all three."
+      },
+      {
+        "text": "Create three dated notes using brace expansion.",
+        "cmd": "touch ~/lab/fieldbook/notes/day{1..3}.txt",
+        "verify": "ls ~/lab/fieldbook/notes should show day1.txt, day2.txt, and day3.txt."
+      },
+      {
+        "text": "Add a line to the first note and inspect its metadata.",
+        "cmd": "echo \"first observation\" &gt; ~/lab/fieldbook/notes/day1.txt && stat ~/lab/fieldbook/notes/day1.txt",
+        "verify": "stat should show a non-zero size and a recent modification time for day1.txt."
+      },
+      {
+        "text": "Archive the notes directory with gzip and list the archive.",
+        "cmd": "tar -czf ~/lab/fieldbook/archive/notes.tar.gz -C ~/lab/fieldbook notes && tar -tzf ~/lab/fieldbook/archive/notes.tar.gz",
+        "verify": "You should see notes/, notes/day1.txt, and the others."
+      },
+      {
+        "text": "Restore the archive into a clean directory and compare.",
+        "cmd": "mkdir -p ~/lab/fieldbook/restore && tar -xzf ~/lab/fieldbook/archive/notes.tar.gz -C ~/lab/fieldbook/restore && diff -r ~/lab/fieldbook/notes ~/lab/fieldbook/restore/notes",
+        "verify": "diff should print nothing. Silence means the trees match."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which cp option best preserves ownership, permissions, timestamps, and links?",
+      "options": [
+        "-r",
+        "-f",
+        "-a",
+        "-v"
+      ],
+      "answer": 2,
+      "why": "Archive mode (-a) combines recursive copying with metadata preservation. It is the right default for backups."
+    },
+    {
+      "q": "What does tar -tzf archive.tar.gz do?",
+      "options": [
+        "Extracts the archive",
+        "Lists the archive contents",
+        "Deletes the archive",
+        "Creates a new archive"
+      ],
+      "answer": 1,
+      "why": "t lists, z handles gzip, f names the archive file. Listing first is a safe inspection step."
+    },
+    {
+      "q": "Why is rm -rf with an unquoted variable dangerous in a script?",
+      "options": [
+        "rm cannot expand variables",
+        "An empty variable can turn the target into a broader path",
+        "It always deletes the home directory",
+        "It disables SELinux"
+      ],
+      "answer": 1,
+      "why": "If the variable is empty, the path can collapse. Quoting plus set -u prevents the worst case."
+    }
+  ]
+}

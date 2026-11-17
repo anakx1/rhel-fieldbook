@@ -1,0 +1,181 @@
+{
+  "id": "ssh-sudo",
+  "module": "m06",
+  "title": "SSH keys and least-privilege sudo",
+  "subtitle": "Replace password guessing with keys, then delegate exactly the commands an operator needs — no more.",
+  "minutes": 40,
+  "difficulty": "Operator",
+  "tags": [
+    "SSH",
+    "ssh-keygen",
+    "sudoers",
+    "permissions",
+    "security"
+  ],
+  "objectives": [
+    "Create an SSH key pair and protect the private key",
+    "Install a public key for key-based authentication",
+    "Explain the permissions SSH requires on .ssh and authorized_keys",
+    "Write a scoped sudoers drop-in and validate it safely",
+    "Choose between wheel membership and command-specific sudo rules"
+  ],
+  "ex200": [
+    {
+      "objective": 0,
+      "exam": "security",
+      "evidence": "ssh-keygen with an explicit key path and no passphrase in a lab."
+    },
+    {
+      "objective": 1,
+      "exam": "security",
+      "evidence": "authorized_keys contains the public key, not the private key."
+    },
+    {
+      "objective": 2,
+      "exam": "security",
+      "evidence": "Correct modes on ~/.ssh and authorized_keys; sshd -t."
+    },
+    {
+      "objective": 3,
+      "exam": "users-groups",
+      "evidence": "visudo -cf validates a drop-in with a command allowlist."
+    },
+    {
+      "objective": 4,
+      "exam": "users-groups",
+      "evidence": "Compare %wheel ALL=(ALL) ALL with a scoped command rule."
+    }
+  ],
+  "versionNotes": [
+    "RHEL 9 and RHEL 10 both use OpenSSH and system-wide crypto policies. RHEL 10 has newer OpenSSH defaults, so generate modern key types rather than relying on old RSA settings.",
+    "RHEL 10 continues to support sudoers drop-ins in /etc/sudoers.d; use visudo -cf and mode 0440 on both releases."
+  ],
+  "sections": [
+    {
+      "title": "Key-based authentication",
+      "file": "01.html"
+    },
+    {
+      "title": "Permissions and sshd policy",
+      "file": "02.html"
+    },
+    {
+      "title": "Sudo without a blank cheque",
+      "file": "03.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "ssh-keygen -t ed25519 -a 100 -C \"student@rhel-lab\"",
+      "desc": "Create a modern SSH key pair with a descriptive comment.",
+      "category": "SSH"
+    },
+    {
+      "cmd": "ssh-copy-id -i ~/.ssh/id_ed25519.pub student@host",
+      "desc": "Install the public key on a remote account.",
+      "category": "SSH"
+    },
+    {
+      "cmd": "chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys",
+      "desc": "Apply the modes SSH expects for key material.",
+      "category": "SSH"
+    },
+    {
+      "cmd": "sudo sshd -T | grep -E 'permitrootlogin|pubkeyauthentication'",
+      "desc": "Validate the sshd configuration before restarting it.",
+      "category": "SSH"
+    },
+    {
+      "cmd": "sudo visudo -cf /etc/sudoers.d/webops",
+      "desc": "Syntax-check a sudoers drop-in without opening an editor.",
+      "category": "Sudo"
+    },
+    {
+      "cmd": "sudo visudo -c",
+      "desc": "Validate the main sudoers file and drop-ins.",
+      "category": "Sudo"
+    },
+    {
+      "cmd": "%webops ALL=(ALL) /usr/bin/systemctl restart httpd",
+      "desc": "Allow the webops group to restart only httpd.",
+      "category": "Sudo"
+    },
+    {
+      "cmd": "sudo -l -U student",
+      "desc": "Show the effective sudo rules for a user.",
+      "category": "Sudo"
+    }
+  ],
+  "lab": {
+    "title": "Keys for access, sudo for one job",
+    "scenario": "Create a dedicated key, place its public half correctly, create the webops group, and grant it one scoped sudo command. Validate every layer.",
+    "minutes": 28,
+    "steps": [
+      {
+        "text": "Generate an ed25519 key pair for the student account without a passphrase in this disposable lab.",
+        "cmd": "ssh-keygen -t ed25519 -N \"\" -f ~/.ssh/id_ed25519 -C student@rhel-lab",
+        "verify": "The private key exists with mode 0600 and the public key with mode 0644.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Install the public key into authorized_keys and correct the directory/file modes.",
+        "cmd": "mkdir -p ~/.ssh && cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys",
+        "verify": "authorized_keys starts with ssh-ed25519 and is readable only by the owner.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create the webops group and add student to it.",
+        "cmd": "sudo groupadd webops && sudo usermod -aG webops student",
+        "verify": "id student lists webops in the supplementary groups.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create a scoped sudoers drop-in that lets webops restart httpd only.",
+        "cmd": "printf \"%s\\n\" \"%webops ALL=(ALL) /usr/bin/systemctl restart httpd\" | sudo tee /etc/sudoers.d/webops && sudo chmod 440 /etc/sudoers.d/webops",
+        "verify": "The file is mode 0440 and contains only the intended command rule.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Validate sudoers and inspect the effective rule for student.",
+        "cmd": "sudo visudo -cf /etc/sudoers.d/webops && sudo -l -U student",
+        "verify": "visudo reports parsed OK and sudo -l shows the scoped systemctl command without full sudo.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which file must contain the public key for key-based SSH login?",
+      "options": [
+        "~/.ssh/id_ed25519",
+        "~/.ssh/authorized_keys",
+        "/etc/shadow",
+        "/etc/ssh/ssh_host_rsa_key"
+      ],
+      "answer": 1,
+      "why": "The remote account’s authorized_keys holds the public key that matches the client’s private key."
+    },
+    {
+      "q": "Why should the private key be mode 0600?",
+      "options": [
+        "It makes SSH faster",
+        "SSH refuses overly permissive key material because it could be stolen",
+        "It enables password login",
+        "It changes the key type"
+      ],
+      "answer": 1,
+      "why": "OpenSSH rejects keys readable by other users; the private key must remain private."
+    },
+    {
+      "q": "What is the safest way to delegate one systemctl command through sudo?",
+      "options": [
+        "Add the user to wheel",
+        "Give the user the root password",
+        "Use a sudoers rule with the full command path and no wildcard",
+        "Set the command mode to 777"
+      ],
+      "answer": 2,
+      "why": "A command-specific rule follows least privilege and avoids granting unrelated root access."
+    }
+  ]
+}

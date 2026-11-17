@@ -1,0 +1,13 @@
+<p>RHEL ships with its own documentation, and it works when the network does not. The primary tool is <code>man</code>. Manual pages are divided into numbered sections, and the number matters:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Section</th><th>Contents</th><th>Example</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>User commands</td><td><code>man 1 passwd</code></td></tr>
+              <tr><td>5</td><td>File formats and configuration</td><td><code>man 5 passwd</code></td></tr>
+              <tr><td>8</td><td>System administration commands</td><td><code>man 8 useradd</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><code>man passwd</code> gives you the command. <code>man 5 passwd</code> gives you the file format. On a system with both, the command page usually wins by default — so specify the section when you need the file layout.</p>
+        <p>Inside a manual page, use <code>Space</code> to page down, <code>b</code> to go back, <code>/pattern</code> to search forward, <code>n</code> for the next match, and <code>q</code> to quit. The pager is usually <code>less</code>; the commands are coming in the next lesson.</p>

@@ -1,0 +1,13 @@
+<p>Many RHEL systems put storage behind <strong>LVM</strong> (Logical Volume Manager). You do not need to build it yet, but you need to recognize it.</p>
+        <div class="code-label"><span>terminal · inspect LVM</span></div>
+        <pre><code>sudo pvs
+sudo vgs
+sudo lvs
+lsblk</code></pre>
+        <p>Think of it as three layers: <strong>physical volumes</strong> (PVs) are disks or partitions; <strong>volume groups</strong> (VGs) pool that space; <strong>logical volumes</strong> (LVs) are flexible block devices carved from the pool. The filesystem sits on the LV. This is why an LV can be extended without repartitioning a physical disk.</p>
+        <p>To extend an LV and grow XFS in one supported operation on RHEL 9+:</p>
+        <div class="code-label"><span>terminal · extend an LV and filesystem</span></div>
+        <pre><code>sudo lvextend -r -L +5G /dev/vg_data/lv_app
+df -h /app</code></pre>
+        <p>The <code>-r</code> flag resizes the filesystem with the volume. XFS can grow online but cannot shrink. This asymmetry is a design constraint, not an inconvenience to work around with force. Plan capacity before creation.</p>
+        <p>Later levels cover PV/VG/LV creation, LVM snapshots, NFS, and Stratis. For now, be able to answer: is this filesystem on a partition or an LV, and is there free space in the volume group?</p>

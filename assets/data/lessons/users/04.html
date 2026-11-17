@@ -1,0 +1,13 @@
+<p>Accounts accumulate. Service accounts, contractors, test users, and forgotten demos all become attack surface. Build a review habit.</p>
+        <ul>
+          <li><strong>Password aging</strong> — <code>chage -l user</code> shows last change, expiry, and warning periods. <code>chage -M 90 user</code> sets a maximum age.</li>
+          <li><strong>Expiry</strong> — <code>chage -E 2026-12-31 user</code> disables an account on a date without deleting it.</li>
+          <li><strong>No login shell</strong> — service accounts should use <code>/sbin/nologin</code> unless they truly need interactive access.</li>
+          <li><strong>Locked, not deleted</strong> — for a departure or investigation, lock first and preserve evidence; delete after retention requirements are clear.</li>
+          <li><strong>Review</strong> — list UID 0 accounts, accounts with empty passwords, and members of privileged groups.</li>
+        </ul>
+        <div class="code-label"><span>terminal · hygiene checks</span></div>
+        <pre><code>awk -F: '$3 == 0 { print $1 }' /etc/passwd
+sudo awk -F: '($2 == "" ) { print $1 }' /etc/shadow
+getent group wheel</code></pre>
+        <p>The first command finds every UID 0 account. There should be exactly one: root. A second UID 0 account is a backdoor until proven otherwise.</p>

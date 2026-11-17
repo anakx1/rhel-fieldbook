@@ -1,0 +1,17 @@
+<p>A static profile needs an address, prefix, gateway, and DNS policy. Keep the method explicit rather than mixing manual and automatic settings.</p>
+<div class="code-label"><span>terminal · static IPv4 configuration</span></div>
+<pre><code>sudo nmcli connection modify "Wired connection 1" \
+  ipv4.method manual \
+  ipv4.addresses 192.0.2.50/24 \
+  ipv4.gateway 192.0.2.1 \
+  ipv4.dns 192.0.2.53
+sudo nmcli connection up "Wired connection 1"
+nmcli connection show "Wired connection 1"</code></pre>
+<p>DNS is part of the connection profile, not a file you edit by habit. NetworkManager writes <code>/etc/resolv.conf</code> or hands DNS to a local resolver. Check how this host is configured before editing that file manually.</p>
+<div class="code-label"><span>terminal · triage order</span></div>
+<pre><code>ip -brief address
+ip route
+getent hosts rhel-lab.example.com
+ping -c 2 192.0.2.1
+ss -tlnp</code></pre>
+<p>Triage in layers: link, address, route, name resolution, then service listening. A successful ping to an IP plus a failed name lookup points at DNS. A successful name lookup plus a refused connection points at the service or firewall, not the network.</p>

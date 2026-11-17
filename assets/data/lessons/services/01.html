@@ -1,0 +1,18 @@
+<p>systemd manages <strong>units</strong>: services, sockets, timers, mounts, targets, and more. A unit is described by a file, usually under <code>/usr/lib/systemd/system/</code> for packages or <code>/etc/systemd/system/</code> for local overrides.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Unit type</th><th>Purpose</th><th>Example</th></tr></thead>
+            <tbody>
+              <tr><td><code>.service</code></td><td>A long-running daemon or oneshot task.</td><td><code>sshd.service</code></td></tr>
+              <tr><td><code>.socket</code></td><td>Socket activation; starts a service on demand.</td><td><code>sshd.socket</code></td></tr>
+              <tr><td><code>.timer</code></td><td>Scheduled activation, a modern cron alternative.</td><td><code>dnf-makecache.timer</code></td></tr>
+              <tr><td><code>.mount</code></td><td>A filesystem mount managed by systemd.</td><td><code>home.mount</code></td></tr>
+              <tr><td><code>.target</code></td><td>A grouping or boot milestone.</td><td><code>multi-user.target</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>Active</strong> means running now. <strong>Enabled</strong> means configured to start at boot. They are independent. A service can be active but not enabled — it will disappear after reboot. A service can be enabled but failed — it tried to start and did not.</p>
+        <div class="code-label"><span>terminal · ask the three questions</span></div>
+        <pre><code>systemctl status sshd
+systemctl is-active sshd
+systemctl is-enabled sshd</code></pre>

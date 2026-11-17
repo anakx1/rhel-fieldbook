@@ -1,0 +1,188 @@
+{
+  "id": "archive-cron",
+  "module": "m10",
+  "title": "Archives and scheduled work",
+  "subtitle": "Package a directory, verify the archive, and schedule a repeatable job without creating a silent failure.",
+  "minutes": 36,
+  "difficulty": "Operator",
+  "tags": [
+    "tar",
+    "gzip",
+    "cron",
+    "crontab",
+    "backup",
+    "scheduling"
+  ],
+  "objectives": [
+    "Create and inspect a compressed tar archive",
+    "Restore an archive into a clean directory",
+    "Read and write cron schedule fields",
+    "Install and inspect a user crontab",
+    "Decide when a systemd timer is a better choice than cron"
+  ],
+  "ex200": [
+    {
+      "objective": 0,
+      "exam": "tools",
+      "evidence": "tar -czf and tar -tzf."
+    },
+    {
+      "objective": 1,
+      "exam": "tools",
+      "evidence": "Extraction into a separate directory."
+    },
+    {
+      "objective": 2,
+      "exam": "deploy",
+      "evidence": "Explain minute/hour/day/month/weekday fields."
+    },
+    {
+      "objective": 3,
+      "exam": "deploy",
+      "evidence": "crontab file and crontab -l."
+    },
+    {
+      "objective": 4,
+      "exam": "deploy",
+      "evidence": "Compare supervision, logs, and Persistent behavior."
+    }
+  ],
+  "versionNotes": [
+    "RHEL 9 and RHEL 10 both use cronie and the same five-field user crontab format. The crond service is enabled by default on standard installations.",
+    "systemd timers are preferred for system-level jobs with dependencies or journal requirements. RHEL 10 keeps both interfaces; do not assume cron has been removed."
+  ],
+  "sections": [
+    {
+      "title": "Archive without surprises",
+      "file": "01.html"
+    },
+    {
+      "title": "Cron in five fields",
+      "file": "02.html"
+    },
+    {
+      "title": "Choose the scheduler",
+      "file": "03.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "tar -czf /backup/notes.tar.gz -C /home/student/lab/fieldbook notes",
+      "desc": "Create a gzip-compressed archive of one directory.",
+      "category": "Archive"
+    },
+    {
+      "cmd": "tar -tzf /backup/notes.tar.gz",
+      "desc": "List archive contents without extracting.",
+      "category": "Archive"
+    },
+    {
+      "cmd": "tar -xzf /backup/notes.tar.gz -C /tmp/restore",
+      "desc": "Extract into a specific, clean directory.",
+      "category": "Archive"
+    },
+    {
+      "cmd": "crontab -l",
+      "desc": "Show the current user’s cron entries.",
+      "category": "Cron"
+    },
+    {
+      "cmd": "crontab /tmp/fieldbook.cron",
+      "desc": "Install a crontab file for the current user.",
+      "category": "Cron"
+    },
+    {
+      "cmd": "0 2 * * * /usr/local/bin/fieldbook-backup",
+      "desc": "Run every day at 02:00.",
+      "category": "Cron"
+    },
+    {
+      "cmd": "systemctl status crond",
+      "desc": "Confirm the cron daemon is running.",
+      "category": "Cron"
+    },
+    {
+      "cmd": "systemctl list-timers --all --no-pager",
+      "desc": "Compare installed timer schedules.",
+      "category": "Cron"
+    }
+  ],
+  "lab": {
+    "title": "Archive, restore, and schedule",
+    "scenario": "Create a compressed archive of the fieldbook notes, prove it can be restored, then install a daily backup entry in the student crontab.",
+    "minutes": 24,
+    "steps": [
+      {
+        "text": "Create a compressed archive of the notes directory under /home/student/lab.",
+        "cmd": "mkdir -p /home/student/lab/archive && tar -czf /home/student/lab/archive/fieldbook-notes.tar.gz -C /home/student/lab/fieldbook notes",
+        "verify": "The archive exists and is non-empty.",
+        "check": "sandbox"
+      },
+      {
+        "text": "List the archive contents before trusting it.",
+        "cmd": "tar -tzf /home/student/lab/archive/fieldbook-notes.tar.gz",
+        "verify": "The listing includes notes/day1.txt and no absolute paths.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Extract into a clean directory and compare the result.",
+        "cmd": "rm -rf /tmp/fieldbook-restore && mkdir -p /tmp/fieldbook-restore && tar -xzf /home/student/lab/archive/fieldbook-notes.tar.gz -C /tmp/fieldbook-restore && find /tmp/fieldbook-restore -type f",
+        "verify": "The restored tree contains the same files as the source notes directory.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create a backup wrapper script that appends a timestamp to a log.",
+        "cmd": "printf \"#!/bin/bash\\ndate >> /home/student/lab/archive/backup.log\\ntar -czf /home/student/lab/archive/fieldbook-notes.tar.gz -C /home/student/lab/fieldbook notes\\n\" | sudo tee /usr/local/bin/fieldbook-backup && sudo chmod 755 /usr/local/bin/fieldbook-backup",
+        "verify": "The script exists with execute permission and writes to the archive directory.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Install a daily 02:00 crontab entry and inspect it.",
+        "cmd": "printf \"0 2 * * * /usr/local/bin/fieldbook-backup\\n\" > /tmp/fieldbook.cron && crontab /tmp/fieldbook.cron && crontab -l",
+        "verify": "crontab -l shows exactly the intended five-field entry.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Confirm the cron daemon is running and compare with timer state.",
+        "cmd": "systemctl status crond && systemctl list-timers --all",
+        "verify": "crond is active and you can explain when you would choose a timer instead.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which tar command lists a gzip archive without extracting it?",
+      "options": [
+        "tar -czf archive.tar.gz dir",
+        "tar -tzf archive.tar.gz",
+        "tar -xzf archive.tar.gz",
+        "gzip -d archive.tar.gz"
+      ],
+      "answer": 1,
+      "why": "-t lists, -z handles gzip, and -f names the archive file."
+    },
+    {
+      "q": "In the cron entry 0 2 * * * /job, when does the job run?",
+      "options": [
+        "Every two minutes",
+        "At 02:00 every day",
+        "At midnight on the second day of the month",
+        "Every two hours"
+      ],
+      "answer": 1,
+      "why": "The fields are minute, hour, day of month, month, and day of week: minute 0 of hour 2, every day."
+    },
+    {
+      "q": "Which is a strong reason to prefer a systemd timer for a system job?",
+      "options": [
+        "Cron cannot run scripts",
+        "Timers integrate with journald and unit dependencies",
+        "Timers do not need root",
+        "Cron cannot run daily"
+      ],
+      "answer": 1,
+      "why": "Timers give structured logging, dependency ordering, and Persistent catch-up behavior."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+<p>Not every question deserves a full manual page. Many commands support a compact help flag:</p>
+        <div class="code-label"><span>terminal · quick help</span></div>
+        <pre><code>ls --help
+dnf --help
+systemctl --help</code></pre>
+        <p>Shell builtins are documented by the shell itself. <code>help cd</code> reads the Bash builtin documentation; <code>man cd</code> may not exist because <code>cd</code> is not an external program. <code>info</code> provides a hyperlinked manual for some GNU tools, though <code>man</code> remains the default habit on RHEL.</p>
+        <p>Packages also install documentation under <code>/usr/share/doc</code>. Look for README files, example configurations, and upstream release notes:</p>
+        <div class="code-label"><span>terminal · local documentation</span></div>
+        <pre><code>ls /usr/share/doc
+ls /usr/share/doc/httpd</code></pre>
+        <p>When a vendor says "see the documentation," this is often where the useful sample lives — especially for services with complex configuration.</p>

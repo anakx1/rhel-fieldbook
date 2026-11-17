@@ -257,6 +257,8 @@
   }
 
   reg('find', function (ctx, args) {
+    ctx.sys.evidence = ctx.sys.evidence || {};
+    ctx.sys.evidence['text:find'] = true;
     var paths = [];
     var predicates = [];
     var maxdepth = Infinity;
@@ -523,6 +525,18 @@
       mount.fstype = fileInfo.node.fsType || 'xfs';
       mount.size = fileInfo.node.size || 0;
       mount.uuid = fileInfo.node.uuid || '';
+    } else {
+      var sourceResolved = VFS.resolve(sys, source, sys.cwd, ctx.user, false);
+      if (!sourceResolved.error && sourceResolved.node) {
+        mount.fstype = sourceResolved.node.fsType || fsType || 'xfs';
+        mount.size = sourceResolved.node.size || 0;
+        mount.uuid = sourceResolved.node.uuid || '';
+      }
+    }
+    var lvmMatch = /^\/dev\/([^/]+)\/([^/]+)$/.exec(source);
+    if (lvmMatch && sys.lvm) {
+      var lv = (sys.lvm.lvs || []).filter(function (item) { return item.vg === lvmMatch[1] && item.name === lvmMatch[2]; })[0];
+      if (lv) lv.mount = targetInfo.path;
     }
     mount.hidden = [];
     C.listChildren(ctx, mount.target).forEach(function (child) {

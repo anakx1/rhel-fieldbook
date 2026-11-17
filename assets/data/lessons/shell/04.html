@@ -1,0 +1,15 @@
+<p>These commands are the equivalent of checking your pockets. They answer: who am I, where am I, and what is this machine doing?</p>
+        <div class="code-label"><span>terminal · first contact</span></div>
+        <pre><code>whoami
+hostname
+pwd
+date
+uptime
+echo "hello, RHEL"</code></pre>
+        <p><code>whoami</code> prints the effective user. <code>hostname</code> prints the host's name; on modern RHEL, <code>hostnamectl</code> gives richer context. <code>pwd</code> prints the current working directory. <code>uptime</code> shows how long the system has been running, how many users are logged in, and load averages over 1, 5, and 15 minutes.</p>
+        <p><code>echo</code> looks trivial, and then you use it to test quoting, variables, and redirection for the rest of your career. Try the difference:</p>
+        <div class="code-label"><span>terminal · quoting matters</span></div>
+        <pre><code>echo $HOME
+echo "$HOME"
+echo '$HOME'</code></pre>
+        <p>Double quotes expand variables; single quotes preserve the literal text. This distinction becomes critical in scripts, where a space or a dollar sign can change the meaning of a command.</p>

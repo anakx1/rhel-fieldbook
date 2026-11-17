@@ -1,0 +1,13 @@
+<p>A foreground process owns your terminal input. A background job runs without blocking the prompt but may still be tied to the terminal session.</p>
+        <div class="code-label"><span>terminal · job control</span></div>
+        <pre><code>sleep 300 &amp;
+jobs
+fg %1
+bg %1
+kill %1</code></pre>
+        <p>The ampersand starts a job in the background. <code>Ctrl+Z</code> suspends the current foreground job — it does not terminate it. <code>bg</code> resumes it in the background; <code>fg</code> brings it back. The percent sign addresses a job, not a PID.</p>
+        <p><code>nohup</code> makes a command ignore SIGHUP and detaches it from the terminal's hangup behavior. It is useful for quick lab work, but it is not a service manager. Production workloads belong in a systemd unit, where restarts, logging, dependencies, and resource limits are explicit.</p>
+        <div class="callout tip">
+          <div class="callout-title">Use tmux for long sessions</div>
+          <p>SSH sessions drop. A terminal multiplexer such as <code>tmux</code> keeps the shell alive on the remote host and lets you reconnect. It is more reliable than hoping a background job survives.</p>
+        </div>

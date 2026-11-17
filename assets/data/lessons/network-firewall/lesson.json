@@ -1,0 +1,196 @@
+{
+  "id": "network-firewall",
+  "module": "m09",
+  "title": "NetworkManager and firewalld",
+  "subtitle": "Configure the connection, verify DNS and routing, then open only the ports the service actually needs.",
+  "minutes": 38,
+  "difficulty": "Operator",
+  "tags": [
+    "NetworkManager",
+    "nmcli",
+    "DNS",
+    "firewalld",
+    "zones"
+  ],
+  "objectives": [
+    "Read NetworkManager device and connection state",
+    "Configure IPv4 addressing and DNS with nmcli",
+    "Triage name resolution and route problems",
+    "Distinguish firewalld runtime from permanent configuration",
+    "Expose a service with a permanent firewall rule and verify it"
+  ],
+  "ex200": [
+    {
+      "objective": 0,
+      "exam": "networking",
+      "evidence": "nmcli device status and connection show."
+    },
+    {
+      "objective": 1,
+      "exam": "networking",
+      "evidence": "nmcli connection modify for address, gateway, and DNS."
+    },
+    {
+      "objective": 2,
+      "exam": "networking",
+      "evidence": "ip route, resolvectl or getent, and ping evidence."
+    },
+    {
+      "objective": 3,
+      "exam": "security",
+      "evidence": "Compare --permanent with runtime and reload."
+    },
+    {
+      "objective": 4,
+      "exam": "security",
+      "evidence": "firewall-cmd --add-service/port and --list-all."
+    }
+  ],
+  "versionNotes": [
+    "NetworkManager and nmcli are the supported network configuration path on both RHEL 9 and RHEL 10. Do not hand-edit ifcfg files or assume network-scripts are available.",
+    "RHEL 10 uses the nftables backend for firewalld. The firewall-cmd interface is stable, but inspect the actual rules with nft when debugging rather than relying on old iptables habits."
+  ],
+  "sections": [
+    {
+      "title": "NetworkManager is the source of truth",
+      "file": "01.html"
+    },
+    {
+      "title": "DNS, routes, and triage",
+      "file": "02.html"
+    },
+    {
+      "title": "Firewall zones and persistence",
+      "file": "03.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "nmcli device status | grep ens3",
+      "desc": "Show interfaces, types, state, and active connections.",
+      "category": "Network"
+    },
+    {
+      "cmd": "nmcli -f NAME,UUID,DEVICE connection show",
+      "desc": "List saved connection profiles.",
+      "category": "Network"
+    },
+    {
+      "cmd": "nmcli connection show \"Wired connection 1\"",
+      "desc": "Inspect one profile’s addressing and DNS settings.",
+      "category": "Network"
+    },
+    {
+      "cmd": "sudo nmcli connection modify \"Wired connection 1\" ipv4.addresses 192.0.2.50/24",
+      "desc": "Set a static IPv4 address on a profile.",
+      "category": "Network"
+    },
+    {
+      "cmd": "sudo nmcli connection up \"Wired connection 1\"",
+      "desc": "Activate the modified connection.",
+      "category": "Network"
+    },
+    {
+      "cmd": "ip route && ip -brief address",
+      "desc": "Read the routing table and interface addresses.",
+      "category": "Network"
+    },
+    {
+      "cmd": "getent hosts rhel-lab.example.com",
+      "desc": "Test name resolution through NSS.",
+      "category": "Network"
+    },
+    {
+      "cmd": "sudo firewall-cmd --permanent --add-service=https",
+      "desc": "Open HTTP in the permanent firewall configuration.",
+      "category": "Firewall"
+    },
+    {
+      "cmd": "sudo firewall-cmd --reload && sudo firewall-cmd --list-services",
+      "desc": "Apply permanent firewall changes to runtime.",
+      "category": "Firewall"
+    },
+    {
+      "cmd": "sudo firewall-cmd --add-port=8443/tcp --permanent",
+      "desc": "Open one TCP port permanently.",
+      "category": "Firewall"
+    },
+    {
+      "cmd": "sudo firewall-cmd --list-all --zone=public",
+      "desc": "Show the active zone’s services and ports.",
+      "category": "Firewall"
+    }
+  ],
+  "lab": {
+    "title": "A static profile and a deliberate opening",
+    "scenario": "Inspect the active connection, set a lab address and DNS server, verify name resolution, then open HTTP and 8443/tcp permanently and reload.",
+    "minutes": 26,
+    "steps": [
+      {
+        "text": "Inspect device state and the active connection profile.",
+        "cmd": "nmcli device status && nmcli connection show",
+        "verify": "You can name the device and the saved connection profile.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Set a static IPv4 address, gateway, and DNS server on the profile.",
+        "cmd": "sudo nmcli connection modify \"Wired connection 1\" ipv4.method manual ipv4.addresses 192.0.2.50/24 ipv4.gateway 192.0.2.1 ipv4.dns 192.0.2.53 && sudo nmcli connection up \"Wired connection 1\"",
+        "verify": "The profile reports manual IPv4 addressing and the intended DNS server.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Verify DNS resolution and the route to the network.",
+        "cmd": "getent hosts rhel-lab.example.com && ip route",
+        "verify": "Name resolution returns an address and a default route exists.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Open HTTP and TCP 8443 permanently in the active zone.",
+        "cmd": "sudo firewall-cmd --permanent --add-service=http && sudo firewall-cmd --permanent --add-port=8443/tcp",
+        "verify": "The permanent configuration contains http and 8443/tcp.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Reload firewalld and verify runtime state.",
+        "cmd": "sudo firewall-cmd --reload && firewall-cmd --list-all",
+        "verify": "The active zone lists http and 8443/tcp after reload.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which command shows NetworkManager device state and profile names?",
+      "options": [
+        "nmcli device status",
+        "ip route",
+        "firewall-cmd --state",
+        "ss -tlnp"
+      ],
+      "answer": 0,
+      "why": "nmcli device status lists the device, type, state, and active connection."
+    },
+    {
+      "q": "What is the difference between firewall-cmd runtime and permanent changes?",
+      "options": [
+        "Runtime changes survive reboot; permanent changes do not",
+        "Permanent changes are saved but require reload or reboot to become runtime",
+        "They are identical",
+        "Permanent changes only affect IPv6"
+      ],
+      "answer": 1,
+      "why": "The permanent configuration is on disk; --reload copies it into the active runtime rules."
+    },
+    {
+      "q": "Which tool tests name resolution through the system’s NSS configuration?",
+      "options": [
+        "ping only",
+        "getent hosts",
+        "firewall-cmd --list-all",
+        "nmcli device wifi"
+      ],
+      "answer": 1,
+      "why": "getent uses NSS and reflects how applications on this host resolve names."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+<p>When "the network is down," establish four facts before changing anything: the interface, the address, the route, and the name resolution. Most problems live in one of those layers.</p>
+        <div class="code-label"><span>terminal · interfaces and addresses</span></div>
+        <pre><code>ip addr
+ip route
+nmcli device status
+nmcli connection show</code></pre>
+        <p><code>ip addr</code> shows interfaces, link state, MAC addresses, and IPv4/IPv6 addresses. <code>ip route</code> shows the routing table; the line marked <code>default</code> is the gateway used for off-subnet traffic. If the default route is missing, local communication may work while the internet does not.</p>
+        <p>On RHEL, NetworkManager owns network configuration. <code>nmcli</code> is the supported command-line interface. A <strong>device</strong> is the hardware or virtual interface; a <strong>connection</strong> is a profile applied to it. A device can have multiple profiles, but only one active connection at a time.</p>
+        <div class="callout note">
+          <div class="callout-title">Files vs profiles</div>
+          <p>Do not hand-edit <code>/etc/sysconfig/network-scripts/ifcfg-*</code> on RHEL 9+ unless you have a specific legacy reason. Use <code>nmcli</code> so NetworkManager remains the source of truth.</p>
+        </div>

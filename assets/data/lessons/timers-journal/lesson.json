@@ -1,0 +1,187 @@
+{
+  "id": "timers-journal",
+  "module": "m07",
+  "title": "Timers and journal evidence",
+  "subtitle": "Schedule repeatable work with systemd timers and read the journal like an operator instead of guessing.",
+  "minutes": 38,
+  "difficulty": "Operator",
+  "tags": [
+    "systemd",
+    "timer",
+    "OnCalendar",
+    "journalctl",
+    "logs"
+  ],
+  "objectives": [
+    "Choose between a timer and a cron job",
+    "Pair a timer unit with a service unit",
+    "Express a schedule with OnCalendar and Persistent",
+    "Enable and inspect a timer",
+    "Use journalctl filters to find a unit’s evidence"
+  ],
+  "ex200": [
+    {
+      "objective": 0,
+      "exam": "deploy",
+      "evidence": "Explain systemd timer integration with journald and dependencies."
+    },
+    {
+      "objective": 1,
+      "exam": "deploy",
+      "evidence": "Create matching .service and .timer files."
+    },
+    {
+      "objective": 2,
+      "exam": "deploy",
+      "evidence": "Use OnCalendar and Persistent in a timer unit."
+    },
+    {
+      "objective": 3,
+      "exam": "deploy",
+      "evidence": "enable --now and list-timers verification."
+    },
+    {
+      "objective": 4,
+      "exam": "running",
+      "evidence": "journalctl -u and priority filters."
+    }
+  ],
+  "versionNotes": [
+    "RHEL 9 and RHEL 10 both support systemd timers, OnCalendar expressions, and Persistent=true. Newer systemd versions may support additional calendar syntax.",
+    "journalctl is the same interface on both releases. RHEL 10 may have a different default journal size, so verify retention rather than assuming it."
+  ],
+  "sections": [
+    {
+      "title": "Schedule with timers",
+      "file": "01.html"
+    },
+    {
+      "title": "A timer is a pair of units",
+      "file": "02.html"
+    },
+    {
+      "title": "Read the journal",
+      "file": "03.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "systemctl list-timers --all",
+      "desc": "Show active and inactive timers with next/last trigger.",
+      "category": "Timers"
+    },
+    {
+      "cmd": "systemd-analyze calendar \"*-*-* 02:00:00\"",
+      "desc": "Explain and normalize a calendar expression.",
+      "category": "Timers"
+    },
+    {
+      "cmd": "sudo systemctl enable --now fieldbook-backup.timer",
+      "desc": "Enable and start a timer unit.",
+      "category": "Timers"
+    },
+    {
+      "cmd": "systemctl status fieldbook-backup.timer",
+      "desc": "Inspect timer state and the last trigger.",
+      "category": "Timers"
+    },
+    {
+      "cmd": "journalctl -u fieldbook-backup.service -n 50 --no-pager",
+      "desc": "Read the journal for the service a timer triggers.",
+      "category": "Logs"
+    },
+    {
+      "cmd": "journalctl --since today -p warning --no-pager",
+      "desc": "Show today’s warning-or-worse entries across units.",
+      "category": "Logs"
+    },
+    {
+      "cmd": "journalctl --disk-usage",
+      "desc": "Check how much space the journal is using.",
+      "category": "Logs"
+    },
+    {
+      "cmd": "sudo journalctl --vacuum-size=500M",
+      "desc": "Retain up to 500 MB of journal data.",
+      "category": "Logs"
+    }
+  ],
+  "lab": {
+    "title": "Nightly backup, visible in the journal",
+    "scenario": "Create a backup script, a oneshot service, and a timer that runs it every night. Enable the timer and inspect its status and logs.",
+    "minutes": 26,
+    "steps": [
+      {
+        "text": "Read authentication evidence from sshd in the journal.",
+        "cmd": "journalctl -u sshd -n 20 --no-pager",
+        "verify": "Output is filtered to sshd and includes accepted or failed login lines.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create the backup script and make it executable.",
+        "cmd": "printf \"#!/bin/bash\\necho backup \\$(date)\\n\" | sudo tee /usr/local/bin/fieldbook-backup && sudo chmod 755 /usr/local/bin/fieldbook-backup",
+        "verify": "The script exists with execute permission.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create the oneshot service that the timer will trigger.",
+        "cmd": "printf \"[Unit]\\nDescription=Fieldbook nightly backup\\n\\n[Service]\\nType=oneshot\\nExecStart=/usr/local/bin/fieldbook-backup\\n\" | sudo tee /etc/systemd/system/fieldbook-backup.service",
+        "verify": "The service has an absolute ExecStart and runs as a oneshot.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create a timer with a nightly calendar schedule and persistence.",
+        "cmd": "printf \"[Unit]\\nDescription=Run fieldbook backup nightly\\n\\n[Timer]\\nOnCalendar=*-*-* 02:00:00\\nPersistent=true\\nUnit=fieldbook-backup.service\\n\\n[Install]\\nWantedBy=timers.target\\n\" | sudo tee /etc/systemd/system/fieldbook-backup.timer",
+        "verify": "The timer names the service, uses OnCalendar, and installs into timers.target.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Reload, enable the timer, and confirm the next trigger.",
+        "cmd": "sudo systemctl daemon-reload && sudo systemctl enable --now fieldbook-backup.timer && systemctl list-timers --all",
+        "verify": "fieldbook-backup.timer is enabled and appears in the timer list.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Inspect timer status and service journal evidence.",
+        "cmd": "systemctl status fieldbook-backup.timer && journalctl -u fieldbook-backup.service -n 50 --no-pager",
+        "verify": "Status shows the timer and the journal command is filtered to the paired service.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which pair correctly schedules a oneshot job?",
+      "options": [
+        "A timer and a matching service",
+        "Two services",
+        "A target and a socket",
+        "A mount and a timer"
+      ],
+      "answer": 0,
+      "why": "A timer triggers a unit, normally a oneshot service with the same base name."
+    },
+    {
+      "q": "What does Persistent=true do on a timer?",
+      "options": [
+        "Runs every second",
+        "Triggers a missed run after boot",
+        "Stores logs on disk",
+        "Prevents the timer from running"
+      ],
+      "answer": 1,
+      "why": "Persistent tells systemd to account for time the machine was off and run a missed job once."
+    },
+    {
+      "q": "Which command shows only sshd journal entries without a pager?",
+      "options": [
+        "journalctl -u sshd --no-pager",
+        "systemctl status sshd --log",
+        "tail -f /etc/ssh/sshd_config",
+        "dnf history sshd"
+      ],
+      "answer": 0,
+      "why": "-u filters by unit and --no-pager writes the full output to the terminal."
+    }
+  ]
+}

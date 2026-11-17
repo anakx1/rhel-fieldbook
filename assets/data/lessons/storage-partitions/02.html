@@ -1,0 +1,15 @@
+<p>Create a partition table with <code>parted</code>, then make the filesystem, mount it, and persist the mount. The exact device name is less important than the sequence and the verification after each step.</p>
+<div class="code-label"><span>terminal · partition, format, mount</span></div>
+<pre><code>sudo parted -s /dev/sdb mklabel gpt mkpart primary xfs 0% 100%
+sudo partprobe /dev/sdb
+lsblk -f /dev/sdb
+sudo mkfs.xfs /dev/sdb1
+sudo blkid /dev/sdb1
+sudo mkdir -p /data2
+sudo mount UUID="REPLACE-WITH-UUID" /data2
+findmnt /data2</code></pre>
+<p>For a permanent mount, copy the UUID into <code>/etc/fstab</code>:</p>
+<div class="code-label"><span>/etc/fstab · six fields</span></div>
+<pre><code>UUID=8f3c1e2a-...  /data2  xfs  defaults  0 0</code></pre>
+<p>The fields are device, mount point, type, options, dump flag, and fsck pass. XFS normally uses <code>0</code> for the fsck pass because it relies on journal recovery and online repair rather than a traditional boot-time full check. Run <code>sudo mount -a</code> after editing; a silent success is the minimum proof that the entry parses and the UUID exists.</p>
+<div class="callout warn"><div class="callout-title">A bad fstab can cost you a boot</div><p>Always validate with <code>mount -a</code> and keep console or recovery access. If an entry is wrong, systemd can drop the machine into emergency mode waiting for a mount that will never arrive.</p></div>

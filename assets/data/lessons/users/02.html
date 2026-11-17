@@ -1,0 +1,17 @@
+<p>Use <code>useradd</code> to create, <code>passwd</code> to set credentials, and <code>usermod</code> to change account attributes.</p>
+        <div class="code-label"><span>terminal · create a user</span></div>
+        <pre><code>sudo useradd -m -s /bin/bash analyst
+sudo passwd analyst
+id analyst</code></pre>
+        <p><code>-m</code> creates the home directory from <code>/etc/skel</code>. <code>-s</code> sets the login shell. Without <code>-m</code>, a home directory may not be created — a classic source of "my shell config is missing" confusion. On RHEL, <code>useradd</code> also consults <code>/etc/login.defs</code> and <code>/etc/default/useradd</code> for defaults.</p>
+        <p>Groups come in two flavors. A user's <strong>primary group</strong> is recorded in <code>/etc/passwd</code> and owns new files by default. <strong>Supplementary groups</strong> add access without changing the primary group. Use <code>-aG</code> to append; omitting <code>-a</code> replaces the entire supplementary list.</p>
+        <div class="code-label"><span>terminal · groups and membership</span></div>
+        <pre><code>sudo groupadd engineering
+sudo usermod -aG engineering analyst
+groups analyst
+id analyst</code></pre>
+        <div class="callout warn">
+          <div class="callout-title">-a is not optional</div>
+          <p><code>usermod -G wheel analyst</code> removes every supplementary group the user had. Always think <code>-aG</code> when adding a group.</p>
+        </div>
+        <p>Lock or remove accounts deliberately. <code>usermod -L</code> prefixes the password hash to lock it; <code>passwd -l</code> does similar. <code>userdel -r</code> removes the home directory and mail spool, which is destructive and may not be appropriate when audit or data retention applies.</p>

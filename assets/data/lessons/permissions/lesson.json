@@ -1,0 +1,159 @@
+{
+  "id": "permissions",
+  "module": "m02",
+  "title": "Permissions, decoded",
+  "subtitle": "Read mode strings, set least privilege, and know when ACLs are the honest answer.",
+  "minutes": 30,
+  "difficulty": "Core",
+  "tags": [
+    "chmod",
+    "chown",
+    "umask",
+    "ACL",
+    "permissions"
+  ],
+  "objectives": [
+    "Decode a long listing into owner, group, and other permissions",
+    "Change modes with symbolic and octal chmod",
+    "Set ownership and reason about directory execute bits",
+    "Calculate effective permissions from umask",
+    "Use ACLs and recognize sticky, setgid, and setuid bits"
+  ],
+  "sections": [
+    {
+      "title": "Read the mode string",
+      "file": "01.html"
+    },
+    {
+      "title": "chmod: symbolic and octal",
+      "file": "02.html"
+    },
+    {
+      "title": "Ownership and umask",
+      "file": "03.html"
+    },
+    {
+      "title": "ACLs and special bits",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "ls -l file",
+      "desc": "Show type, mode, owner, group, and size.",
+      "category": "Permissions"
+    },
+    {
+      "cmd": "chmod 640 file",
+      "desc": "Set an exact octal mode.",
+      "category": "Permissions"
+    },
+    {
+      "cmd": "chmod u+x script.sh",
+      "desc": "Add execute permission for the owner.",
+      "category": "Permissions"
+    },
+    {
+      "cmd": "chown analyst:engineering file",
+      "desc": "Set user and group ownership.",
+      "category": "Permissions"
+    },
+    {
+      "cmd": "umask",
+      "desc": "Show the current default permission mask.",
+      "category": "Permissions"
+    },
+    {
+      "cmd": "getfacl file",
+      "desc": "Show access control list entries.",
+      "category": "Permissions"
+    },
+    {
+      "cmd": "setfacl -m u:analyst:rw file",
+      "desc": "Grant a named user read/write via ACL.",
+      "category": "Permissions"
+    },
+    {
+      "cmd": "chmod g+s shared-dir",
+      "desc": "Make new files inherit the directory group.",
+      "category": "Permissions"
+    },
+    {
+      "cmd": "find / -perm -4000 -type f",
+      "desc": "Locate setuid executables. Audit carefully.",
+      "category": "Permissions"
+    }
+  ],
+  "lab": {
+    "title": "Build a shared project directory",
+    "scenario": "Two groups need controlled access to one directory. Solve it without 777 and without changing the whole filesystem.",
+    "minutes": 20,
+    "steps": [
+      {
+        "text": "Create a shared directory, two groups, and a builder user.",
+        "cmd": "sudo mkdir -p /srv/fieldbook && sudo groupadd builders && sudo groupadd auditors && sudo useradd -m -s /bin/bash builder && sudo usermod -aG builders builder",
+        "verify": "groupadd and useradd should succeed; id builder should show the builders group.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Set ownership and a group-readable/writable mode.",
+        "cmd": "sudo chown root:builders /srv/fieldbook && sudo chmod 2770 /srv/fieldbook",
+        "verify": "ls -ld /srv/fieldbook should show drwxrws--- and the setgid s.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create a file as a member of builders and confirm group inheritance.",
+        "cmd": "sudo -u builder touch /srv/fieldbook/report.txt && ls -l /srv/fieldbook/report.txt",
+        "verify": "The owner should be builder and the group should be builders, not the user primary group.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Grant auditors read access with an ACL instead of changing the mode.",
+        "cmd": "sudo setfacl -m g:auditors:r /srv/fieldbook/report.txt && getfacl /srv/fieldbook/report.txt",
+        "verify": "getfacl should show group:auditors:r-- on report.txt without changing the base mode.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Verify the base mode, ACL, and effective access.",
+        "cmd": "ls -l /srv/fieldbook/report.txt && getfacl /srv/fieldbook/report.txt",
+        "verify": "A + appears after the mode. The ACL lists auditors with r--.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "What does chmod 750 grant?",
+      "options": [
+        "rwxr-x---",
+        "rwxrwxrwx",
+        "rw-r-----",
+        "rwxr----x"
+      ],
+      "answer": 0,
+      "why": "7 = rwx, 5 = r-x, 0 = none. Owner gets rwx, group r-x, others nothing."
+    },
+    {
+      "q": "Why can a directory with mode 600 prevent access to a file inside it even if the file is world-readable?",
+      "options": [
+        "The file is encrypted",
+        "Directory execute permission is needed to traverse it",
+        "The file has no inode",
+        "SELinux always blocks it"
+      ],
+      "answer": 1,
+      "why": "To reach a known path inside a directory, you need execute (search) permission on the directory."
+    },
+    {
+      "q": "What is the standard way to let two groups share write access without making a directory world-writable?",
+      "options": [
+        "chmod 777",
+        "set an ACL for the second group",
+        "disable SELinux",
+        "make every user root"
+      ],
+      "answer": 1,
+      "why": "ACLs grant additional named users or groups precisely. 777 gives everyone write access and hides the design."
+    }
+  ]
+}

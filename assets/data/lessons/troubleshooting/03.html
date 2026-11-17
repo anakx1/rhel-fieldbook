@@ -1,0 +1,17 @@
+<div class="table-wrap">
+          <table>
+            <thead><tr><th>Symptom</th><th>First checks</th><th>Common causes</th></tr></thead>
+            <tbody>
+              <tr><td>Web service unreachable</td><td><code>systemctl status httpd</code>, <code>ss -tlnp</code>, <code>firewall-cmd --list-all</code>, <code>curl -I localhost</code></td><td>Service stopped, wrong bind address, firewall, SELinux port, DNS.</td></tr>
+              <tr><td>Disk full</td><td><code>df -hT</code>, <code>df -i</code>, <code>du -xhd1</code>, <code>lsof +L1</code></td><td>Log growth, deleted-open files, inode exhaustion, runaway cache.</td></tr>
+              <tr><td>Cannot SSH</td><td><code>systemctl status sshd</code>, <code>ss -tlnp | grep :22</code>, <code>journalctl -u sshd</code>, <code>sshd -t</code></td><td>Config error, firewall, key/permission issue, SELinux, network path.</td></tr>
+              <tr><td>Host slow</td><td><code>uptime</code>, <code>vmstat 1</code>, <code>top</code>, <code>iostat -x 1</code></td><td>CPU saturation, memory pressure/swap, blocked I/O, runaway process.</td></tr>
+              <tr><td>Service will not start</td><td><code>systemctl status</code>, <code>journalctl -u</code>, unit file, permissions</td><td>Bad config, missing dependency, wrong user, port conflict, SELinux.</td></tr>
+              <tr><td>Permission denied</td><td><code>ls -l</code>, <code>namei -l path</code>, <code>getfacl</code>, <code>ls -Z</code>, <code>ausearch -m AVC</code></td><td>Mode bits, directory traversal, ACL, SELinux context.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><code>namei -l /path/to/file</code> is an underrated tool: it walks every component of the path and shows ownership and modes, which immediately reveals a missing execute bit on a parent directory.</p>
+        <div class="code-label"><span>terminal · trace a path permission</span></div>
+        <pre><code>namei -l /var/www/html/index.html
+ls -lZ /var/www/html/index.html</code></pre>

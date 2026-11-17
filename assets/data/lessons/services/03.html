@@ -1,0 +1,10 @@
+<p>systemd captures service output in the <strong>journal</strong>. <code>journalctl</code> reads it with filtering that flat files cannot match.</p>
+        <div class="code-label"><span>terminal · journal queries</span></div>
+        <pre><code>journalctl -u sshd
+journalctl -u sshd --since "1 hour ago"
+journalctl -u sshd -f
+journalctl -p err -b
+journalctl --since today --until "10:00"</code></pre>
+        <p><code>-u</code> filters by unit, <code>--since</code> and <code>--until</code> narrow time, <code>-f</code> follows, <code>-p err</code> filters by priority, and <code>-b</code> limits to the current boot. <code>-b -1</code> reads the previous boot if persistent storage is enabled.</p>
+        <p>By default, the journal may be volatile and live in <code>/run/log/journal</code>. To retain logs across reboots, create <code>/var/log/journal</code> and restart <code>systemd-journald</code>. Capacity is managed by <code>journald.conf</code>; on a busy host, plan disk usage deliberately.</p>
+        <p>Traditional text logs are still useful. rsyslog may write <code>/var/log/messages</code>, <code>/var/log/secure</code>, and application-specific files. The journal often has the same events, with more structure.</p>

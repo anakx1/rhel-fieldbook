@@ -1,0 +1,175 @@
+{
+  "id": "storage",
+  "module": "m04",
+  "title": "Storage, without guessing",
+  "subtitle": "Block devices, filesystems, mounts, and the difference between full and truly full.",
+  "minutes": 29,
+  "difficulty": "Core",
+  "tags": [
+    "storage",
+    "lsblk",
+    "mount",
+    "fstab",
+    "LVM",
+    "XFS"
+  ],
+  "objectives": [
+    "Read the block-device and filesystem landscape",
+    "Mount and unmount a filesystem safely",
+    "Persist a mount with /etc/fstab using a UUID",
+    "Diagnose capacity and inode exhaustion",
+    "Recognize the LVM layer and extend a logical volume"
+  ],
+  "sections": [
+    {
+      "title": "Devices, filesystems, mounts",
+      "file": "01.html"
+    },
+    {
+      "title": "Mount, unmount, and persist",
+      "file": "02.html"
+    },
+    {
+      "title": "Capacity, inodes, and deleted files",
+      "file": "03.html"
+    },
+    {
+      "title": "The LVM layer, in one page",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "lsblk -f -o NAME,FSTYPE,LABEL,UUID,MOUNTPOINTS",
+      "desc": "Show a focused block-device and filesystem table.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "blkid",
+      "desc": "Show filesystem UUIDs and types.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "findmnt /data",
+      "desc": "Show the mount source, target, and options.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "df -hT -x tmpfs -x devtmpfs",
+      "desc": "Show real filesystem capacity and type.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "df -i",
+      "desc": "Check inode consumption.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "du -xhd1 /var",
+      "desc": "Show directory usage without crossing mounts.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo mount UUID=... /mnt/data",
+      "desc": "Mount a filesystem by UUID.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo umount /mnt/data",
+      "desc": "Unmount a filesystem.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo mount -a",
+      "desc": "Validate and apply all fstab entries.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo lsof +L1",
+      "desc": "Find deleted files still held open.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo lvs",
+      "desc": "List logical volumes.",
+      "category": "Storage"
+    },
+    {
+      "cmd": "sudo lvextend -r -L +5G LV",
+      "desc": "Extend an LV and resize its filesystem.",
+      "category": "Storage"
+    }
+  ],
+  "lab": {
+    "title": "A safe storage sandbox",
+    "scenario": "Create a small file-backed filesystem, mount it, fill it, inspect it, and clean up. No real disk is touched.",
+    "minutes": 20,
+    "steps": [
+      {
+        "text": "Inspect the current storage map and capacity.",
+        "cmd": "lsblk -f && df -hT",
+        "verify": "Identify which filesystem holds / and what else is mounted.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create a 64 MB file and format it as XFS.",
+        "cmd": "dd if=/dev/zero of=/tmp/lab-disk.img bs=1M count=64 status=progress && sudo mkfs.xfs /tmp/lab-disk.img",
+        "verify": "mkfs refuses if the target already has a filesystem; that is a feature.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Mount it on a new directory and inspect the mount.",
+        "cmd": "sudo mkdir -p /mnt/labdisk && sudo mount -o loop /tmp/lab-disk.img /mnt/labdisk && findmnt /mnt/labdisk",
+        "verify": "findmnt /mnt/labdisk should show the loop device and XFS filesystem type.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Write data, check usage, and calculate directory consumption.",
+        "cmd": "sudo dd if=/dev/zero of=/mnt/labdisk/fill bs=1M count=20 && df -h /mnt/labdisk && du -sh /mnt/labdisk",
+        "verify": "df should show the new filesystem with used space, and du should report the fill file.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Unmount and remove the file-backed disk.",
+        "cmd": "sudo umount /mnt/labdisk && rm /tmp/lab-disk.img && sudo rmdir /mnt/labdisk",
+        "verify": "findmnt /mnt/labdisk should return nothing.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which command shows filesystem UUIDs and types?",
+      "options": [
+        "lsblk -f",
+        "df -i",
+        "du -sh",
+        "free -h"
+      ],
+      "answer": 0,
+      "why": "lsblk -f prints filesystem type, label, UUID, and mount point. blkid also queries this information."
+    },
+    {
+      "q": "df shows free space but writes fail with \"No space left on device.\" What should you check?",
+      "options": [
+        "Inode usage with df -i",
+        "The firewall",
+        "DNS resolution",
+        "The default route"
+      ],
+      "answer": 0,
+      "why": "A filesystem can exhaust inodes while blocks remain free. df -i reveals it."
+    },
+    {
+      "q": "Why use a UUID in /etc/fstab instead of /dev/sdb1?",
+      "options": [
+        "UUIDs are shorter",
+        "Device names can change across boots and hardware changes",
+        "UUIDs disable SELinux",
+        "Only UUIDs can mount XFS"
+      ],
+      "answer": 1,
+      "why": "Device enumeration order can change. UUIDs identify the filesystem itself, making mounts stable."
+    }
+  ]
+}

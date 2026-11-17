@@ -1,0 +1,16 @@
+<p>Traditional permissions have exactly one owner and one group. When you need to grant a second user or a second group access, an <strong>access control list</strong> is the honest tool.</p>
+        <div class="code-label"><span>terminal · grant a second group access</span></div>
+        <pre><code>sudo setfacl -m g:audit:r report.txt
+getfacl report.txt
+sudo setfacl -m u:analyst:rw report.txt</code></pre>
+        <p>An ACL entry appears as a <code>+</code> at the end of the mode string. <code>getfacl</code> shows the entries; <code>setfacl -x</code> removes them. Default ACLs on a directory can propagate access to newly created files.</p>
+        <p>Three special bits deserve recognition:</p>
+        <ul>
+          <li><strong>sticky bit</strong> on a directory (<code>drwxrwxrwt</code>) lets users delete only their own files. This is why <code>/tmp</code> is shared safely. Set with <code>chmod +t</code>.</li>
+          <li><strong>setgid</strong> on a directory makes new files inherit the directory's group. This is the standard shared-project pattern. Set with <code>chmod g+s</code>.</li>
+          <li><strong>setuid</strong> on an executable runs it with the file owner's effective UID. It is potentially dangerous and should be rare. Find them with <code>find / -perm -4000 -type f</code>.</li>
+        </ul>
+        <div class="callout note">
+          <div class="callout-title">SELinux is a second gate</div>
+          <p>Traditional permissions and ACLs are not the whole story on RHEL. SELinux can deny access even when the mode bits allow it. You will learn to read <code>ls -Z</code>, <code>getenforce</code>, and AVC denials in the security lesson.</p>
+        </div>

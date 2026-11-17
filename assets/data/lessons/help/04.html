@@ -1,0 +1,16 @@
+<p>You know what you want to do, but not which command does it. Search the manual index:</p>
+        <div class="code-label"><span>terminal · search the manual</span></div>
+        <pre><code>man -k password
+apropos password
+whatis passwd</code></pre>
+        <p><code>man -k</code> and <code>apropos</code> search short descriptions and print matching pages. <code>whatis</code> prints the one-line description for a specific page. If the index is missing, rebuild it with <code>sudo mandb</code>.</p>
+        <p>When a command exists but you do not know where it came from, ask the package manager or RPM database:</p>
+        <div class="code-label"><span>terminal · trace a command to its package</span></div>
+        <pre><code>command -v sshd
+rpm -qf "$(command -v sshd)"
+dnf provides '*/sshd'</code></pre>
+        <p><code>command -v</code> prints the path the shell would execute. <code>rpm -qf</code> asks which installed package owns that file. <code>dnf provides</code> finds available packages that supply a file or capability — useful when the command is not installed yet.</p>
+        <div class="callout note">
+          <div class="callout-title">Aliases are not binaries</div>
+          <p>If <code>command -v</code> prints something like <code>alias ls='ls --color=auto'</code>, the command is being intercepted by your shell. Use <code>type -a ls</code> to see all resolutions, including the real executable.</p>
+        </div>

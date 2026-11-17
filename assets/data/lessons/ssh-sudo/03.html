@@ -1,0 +1,11 @@
+<p><code>sudo</code> is a policy engine, not a binary that means "root". A grant should answer three questions: who, on which hosts, and which commands. Blanket <code>ALL=(ALL) ALL</code> is a valid admin choice, but it should be deliberate.</p>
+<div class="code-label"><span>/etc/sudoers.d/webops · scoped delegation</span></div>
+<pre><code>%webops ALL=(ALL) /usr/bin/systemctl restart httpd
+%webops ALL=(ALL) /usr/bin/systemctl status httpd</code></pre>
+<p>Prefer absolute command paths and avoid wildcards that can be abused to run unrelated commands. Validate with <code>visudo -cf</code>; the drop-in must not be world-writable, and a common production mode is <code>0440</code>.</p>
+<div class="code-label"><span>terminal · validate and inspect</span></div>
+<pre><code>sudo chown root:root /etc/sudoers.d/webops
+sudo chmod 440 /etc/sudoers.d/webops
+sudo visudo -cf /etc/sudoers.d/webops
+sudo -l -U student</code></pre>
+<div class="callout warn"><div class="callout-title">Do not lock yourself out</div><p>Keep an existing root session open while changing sudo policy. A syntax error in sudoers can disable sudo for everyone, and a bad sshd config can remove your remote path in.</p></div>

@@ -1,0 +1,31 @@
+<p>This script combines the pieces. It is intentionally small, but it demonstrates the shape of a useful operational tool: validate inputs, set strict mode, log clearly, and fail with a non-zero status.</p>
+        <div class="code-label"><span>healthcheck.sh · complete example</span></div>
+        <pre><code>#!/bin/bash
+set -euo pipefail
+
+report_dir="${1:-$HOME/health}"
+mkdir -p "$report_dir"
+
+stamp=$(date +%Y%m%d-%H%M%S)
+report="$report_dir/health-$stamp.txt"
+
+{
+  echo "RHEL health report"
+  echo "host: $(hostname)"
+  echo "time: $(date -Iseconds)"
+  echo "kernel: $(uname -r)"
+  echo
+  echo "== root filesystem =="
+  df -h /
+  echo
+  echo "== failed units =="
+  systemctl --failed --no-legend || true
+  echo
+  echo "== error-priority journal =="
+  journalctl -p err -b --no-pager -n 20 || true
+} &gt; "$report"
+
+echo "wrote $report"
+wc -l "$report"</code></pre>
+        <p>Notice the <code>|| true</code> after commands that are allowed to find nothing. Without it, strict mode would abort the report when there are no failed units — an empty result is not an error. This is a deliberate exception, not a blanket suppression.</p>
+        <p>In later levels you will add logging, locking, retention, and scheduling. The most important habit is already here: the script produces a predictable artifact and tells you where it is.</p>

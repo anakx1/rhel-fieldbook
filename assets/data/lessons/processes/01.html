@@ -1,0 +1,20 @@
+<p>Every process has a <strong>PID</strong>, a parent PID, an owner, a state, and a command line. PID 1 on RHEL is <code>systemd</code>, which adopts or reaps orphaned processes and manages services. A process lineage is called a tree for a reason.</p>
+        <div class="code-label"><span>terminal · process inventory</span></div>
+        <pre><code>ps -ef
+ps aux
+pgrep -a sshd
+ps -eo pid,ppid,user,stat,%cpu,%mem,cmd --sort=-%cpu | head</code></pre>
+        <p><code>ps -ef</code> uses BSD-style full format. <code>ps aux</code> is the common BSD syntax. Both are fine; pick one and learn to read it. <code>pgrep -a</code> finds processes by name and prints the full command line.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>State</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>R</code></td><td>Running or runnable.</td></tr>
+              <tr><td><code>S</code></td><td>Interruptible sleep, waiting for an event.</td></tr>
+              <tr><td><code>D</code></td><td>Uninterruptible sleep, often I/O. Cannot be killed until it returns.</td></tr>
+              <tr><td><code>T</code></td><td>Stopped by a job-control signal.</td></tr>
+              <tr><td><code>Z</code></td><td>Zombie: exited, waiting for its parent to reap it.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>A single <code>D</code> state process can indicate a storage problem. A pile of <code>Z</code> processes usually points to a broken parent, not a broken child. The state column is diagnostic, not decorative.</p>

@@ -1,0 +1,10 @@
+<p>After writing a unit, reload the manager, enable it for boot, and start it now. Then verify the unit's state and read its logs.</p>
+<div class="code-label"><span>terminal · load, enable, verify</span></div>
+<pre><code>sudo systemctl daemon-reload
+sudo systemctl enable --now fieldbook.service
+systemctl is-enabled fieldbook.service
+systemctl status fieldbook.service
+journalctl -u fieldbook.service -n 50 --no-pager</code></pre>
+<p>When a unit fails, do not keep restarting it blindly. Read the exit code, the journal lines immediately before the failure, and the executable permissions. A missing interpreter, a non-absolute path, a SELinux denial, or a bad dependency will each look like "the service is down" until you read the evidence.</p>
+<div class="callout warn"><div class="callout-title">Know the difference between mask and disable</div><p><code>disable</code> removes the install links. <code>mask</code> links the unit to /dev/null and prevents it from starting, even as a dependency. Masking is useful for a deliberately disabled service; it can also confuse you later if you forget it exists.</p></div>
+<div class="callout note"><div class="callout-title">RHEL 9 vs RHEL 10</div><p>The unit schema is compatible, but RHEL 10's newer systemd may accept directives that RHEL 9 does not. If you manage both versions, test the unit on the oldest target you support.</p></div>

@@ -1,0 +1,17 @@
+<p>Traditional permissions ask <em>who</em> you are and <em>what mode bits</em> allow. SELinux adds a label-based policy: even root can be denied if the process domain is not allowed to access the target type. This is <strong>mandatory access control</strong>, and it is one of the reasons RHEL is harder to casually compromise.</p>
+        <div class="code-label"><span>terminal · check the mode and labels</span></div>
+        <pre><code>getenforce
+sestatus
+ls -Z /var/www/html
+ps -eZ | grep httpd</code></pre>
+        <p>Modes:</p>
+        <ul>
+          <li><strong>Enforcing</strong> — policy is applied and denials are blocked and logged.</li>
+          <li><strong>Permissive</strong> — policy is evaluated and denials are logged, but access is allowed. A diagnostic mode, not a destination.</li>
+          <li><strong>Disabled</strong> — SELinux is off. Requiring a reboot and losing protection is not a troubleshooting step.</li>
+        </ul>
+        <p>A context looks like <code>system_u:object_r:httpd_sys_content_t:s0</code>. The type is the part you will work with most: <code>httpd_sys_content_t</code> for web content, <code>ssh_home_t</code> for SSH files, <code>user_home_t</code> for home data. Files moved into a new location keep their old context; files created in the right location usually inherit the correct one.</p>
+        <div class="callout warn">
+          <div class="callout-title">Never start by disabling SELinux</div>
+          <p>Disabling enforcement hides the actual mismatch and often creates a false success that fails again on the next host. Read the denial, fix the label, port, or boolean, then keep enforcing.</p>
+        </div>

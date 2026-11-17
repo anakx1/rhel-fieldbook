@@ -1,0 +1,16 @@
+<p><code>ls</code> is simple until you need to see hidden files, permissions, or sort order. The useful combinations:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>What it shows</th></tr></thead>
+            <tbody>
+              <tr><td><code>ls -l</code></td><td>Long format: type, permissions, links, owner, group, size, timestamp, name.</td></tr>
+              <tr><td><code>ls -a</code></td><td>Include dotfiles such as <code>.bashrc</code> and <code>.ssh</code>.</td></tr>
+              <tr><td><code>ls -lh</code></td><td>Human-readable sizes.</td></tr>
+              <tr><td><code>ls -lt</code></td><td>Newest first — excellent for "what just changed?"</td></tr>
+              <tr><td><code>ls -ltr</code></td><td>Oldest first, with the newest at the bottom.</td></tr>
+              <tr><td><code>ls -ld /var/log</code></td><td>Information about the directory itself, not its contents.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The <code>-d</code> flag catches people constantly. <code>ls -l /var/log</code> lists the contents of the directory. <code>ls -ld /var/log</code> lists the directory entry itself, which is what you need when checking ownership or permissions on the directory.</p>
+        <p>Wildcards are expanded by the shell before the command runs. <code>ls /etc/*.conf</code> becomes a list of matching paths. If nothing matches, the literal pattern may be passed through, which is why careful scripts test with <code>compgen</code> or <code>find</code> instead of assuming a glob matched.</p>

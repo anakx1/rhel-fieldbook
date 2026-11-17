@@ -1,0 +1,16 @@
+<p><code>cat</code> dumps a file to the terminal. It is perfect for short files and terrible for a 2 GB log. Use the right viewer:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>Use</th></tr></thead>
+            <tbody>
+              <tr><td><code>cat file</code></td><td>Small files, or feeding content into a pipe.</td></tr>
+              <tr><td><code>less file</code></td><td>Paged reading with search. <code>/pattern</code>, <code>n</code>, <code>q</code>.</td></tr>
+              <tr><td><code>head -n 20 file</code></td><td>First 20 lines.</td></tr>
+              <tr><td><code>tail -n 20 file</code></td><td>Last 20 lines.</td></tr>
+              <tr><td><code>tail -f file</code></td><td>Follow new lines as they arrive. Ctrl+C to stop.</td></tr>
+              <tr><td><code>wc -l file</code></td><td>Count lines.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>On RHEL, logs are increasingly in the systemd journal rather than flat files. <code>journalctl</code> provides its own paging and filtering. Flat files still exist — authentication often lands in <code>/var/log/secure</code>, and application logs may live under <code>/var/log/&lt;app&gt;/</code>.</p>
+        <p><code>less</code> is worth learning properly. It does not load the entire file into memory the way an editor might, it preserves the terminal, and it lets you search without modifying anything. Use <code>less +F file</code> for a follow mode that behaves like <code>tail -f</code>.</p>

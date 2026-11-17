@@ -1,0 +1,188 @@
+{
+  "id": "storage-lvm",
+  "module": "m05",
+  "title": "LVM, capacity, and swap",
+  "subtitle": "Build a flexible storage stack from physical volumes, volume groups, and logical volumes — then grow it without downtime.",
+  "minutes": 42,
+  "difficulty": "Operator",
+  "tags": [
+    "LVM",
+    "PV",
+    "VG",
+    "LV",
+    "swap",
+    "lvextend"
+  ],
+  "objectives": [
+    "Explain the PV, VG, and LV layers",
+    "Create a physical volume and volume group",
+    "Create a logical volume, format it, and mount it",
+    "Extend a logical volume and its XFS filesystem online",
+    "Plan swap and capacity with the right constraints"
+  ],
+  "ex200": [
+    {
+      "objective": 0,
+      "exam": "local-storage",
+      "evidence": "Read pvs, vgs, lvs, and lsblk as one stack."
+    },
+    {
+      "objective": 1,
+      "exam": "local-storage",
+      "evidence": "pvcreate and vgcreate on a dedicated device."
+    },
+    {
+      "objective": 2,
+      "exam": "local-storage",
+      "evidence": "lvcreate, mkfs.xfs, mkdir, mount, findmnt."
+    },
+    {
+      "objective": 3,
+      "exam": "local-storage",
+      "evidence": "lvextend -r and verify df/findmnt growth."
+    },
+    {
+      "objective": 4,
+      "exam": "local-storage",
+      "evidence": "mkswap/swapon and XFS grow-only planning."
+    }
+  ],
+  "versionNotes": [
+    "The LVM command family is unchanged between RHEL 9 and RHEL 10 for this workflow; RHEL 10 uses the same device-mapper stack.",
+    "RHEL 9 and 10 both support online XFS growth. Shrinking XFS is not supported on either release."
+  ],
+  "sections": [
+    {
+      "title": "The LVM stack",
+      "file": "01.html"
+    },
+    {
+      "title": "Create and mount a logical volume",
+      "file": "02.html"
+    },
+    {
+      "title": "Grow capacity and add swap",
+      "file": "03.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "sudo pvs && sudo vgs && sudo lvs",
+      "desc": "Inspect all three LVM layers at once.",
+      "category": "LVM"
+    },
+    {
+      "cmd": "sudo pvcreate /dev/sdb",
+      "desc": "Initialise a block device as an LVM physical volume.",
+      "category": "LVM"
+    },
+    {
+      "cmd": "sudo vgcreate vgdata /dev/sdb",
+      "desc": "Create a volume group from one or more PVs.",
+      "category": "LVM"
+    },
+    {
+      "cmd": "sudo lvcreate -n lvapp -L 5G vgdata",
+      "desc": "Create a 5 GiB logical volume in vgdata.",
+      "category": "LVM"
+    },
+    {
+      "cmd": "sudo mkfs.xfs /dev/vgdata/lvapp",
+      "desc": "Put an XFS filesystem on the logical volume.",
+      "category": "LVM"
+    },
+    {
+      "cmd": "sudo mount /dev/vgdata/lvapp /app",
+      "desc": "Mount the new filesystem.",
+      "category": "LVM"
+    },
+    {
+      "cmd": "sudo lvextend -r -L +2G /dev/vgdata/lvapp",
+      "desc": "Extend the LV and grow XFS in one operation.",
+      "category": "LVM"
+    },
+    {
+      "cmd": "sudo pvdisplay /dev/sdb",
+      "desc": "Show physical-volume allocation and free extents.",
+      "category": "LVM"
+    }
+  ],
+  "lab": {
+    "title": "Build a volume group from a spare disk",
+    "scenario": "Use /dev/sdb in the sandbox as a spare disk. Create a PV, VG, LV, filesystem, and mount, then extend it. Finish by activating swap on /dev/sdc.",
+    "minutes": 30,
+    "steps": [
+      {
+        "text": "Inspect the current LVM stack and confirm /dev/sdb is unused.",
+        "cmd": "lsblk && sudo pvs && sudo vgs && sudo lvs",
+        "verify": "/dev/sdb appears as a disk but not as a PV, VG, or LV.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Initialise /dev/sdb as a physical volume and create vgdata.",
+        "cmd": "sudo pvcreate /dev/sdb && sudo vgcreate vgdata /dev/sdb",
+        "verify": "pvs shows /dev/sdb in vgdata and vgs shows vgdata with free space.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create a 5 GiB logical volume named lvapp.",
+        "cmd": "sudo lvcreate -n lvapp -L 5G vgdata && sudo lvs",
+        "verify": "lvs lists vgdata/lvapp with the expected size.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Format the LV with XFS, mount it at /app, and verify the mount.",
+        "cmd": "sudo mkfs.xfs /dev/vgdata/lvapp && sudo mkdir -p /app && sudo mount /dev/vgdata/lvapp /app && findmnt /app",
+        "verify": "findmnt /app shows /dev/mapper/vgdata-lvapp and xfs.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Extend the logical volume by 2 GiB and resize XFS in the same command.",
+        "cmd": "sudo lvextend -r -L +2G /dev/vgdata/lvapp && df -h /app",
+        "verify": "The LV size and the mounted filesystem both grow; no unmount is required.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create and activate swap on /dev/sdc.",
+        "cmd": "sudo mkswap /dev/sdc && sudo swapon /dev/sdc && swapon --show",
+        "verify": "swapon --show lists /dev/sdc as active swap.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Which layer pools physical storage so logical volumes can be carved from it?",
+      "options": [
+        "Physical volume",
+        "Volume group",
+        "Logical volume",
+        "Filesystem"
+      ],
+      "answer": 1,
+      "why": "A volume group pools one or more physical volumes and allocates extents to logical volumes."
+    },
+    {
+      "q": "What does lvextend -r do?",
+      "options": [
+        "Resizes the filesystem after extending the volume",
+        "Removes the volume",
+        "Reboots the host",
+        "Recreates the partition table"
+      ],
+      "answer": 0,
+      "why": "-r invokes the appropriate filesystem resize helper after extending the logical volume."
+    },
+    {
+      "q": "Which filesystem resize is supported online for XFS?",
+      "options": [
+        "Grow only",
+        "Shrink only",
+        "Both grow and shrink",
+        "Neither"
+      ],
+      "answer": 0,
+      "why": "XFS supports online growth. Shrinking requires creating a new filesystem and migrating data."
+    }
+  ]
+}

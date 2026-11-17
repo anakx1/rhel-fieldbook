@@ -1,0 +1,26 @@
+<p>Every process has three standard streams: <strong>stdin</strong> (0), <strong>stdout</strong> (1), and <strong>stderr</strong> (2). Redirection changes where they go. This is the mechanism behind most useful one-liners.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Syntax</th><th>Effect</th></tr></thead>
+            <tbody>
+              <tr><td><code>cmd &gt; file</code></td><td>Send stdout to file, truncating it first.</td></tr>
+              <tr><td><code>cmd &gt;&gt; file</code></td><td>Append stdout to file.</td></tr>
+              <tr><td><code>cmd 2&gt; error.log</code></td><td>Send stderr to a file.</td></tr>
+              <tr><td><code>cmd 2&gt;&amp;1</code></td><td>Send stderr to wherever stdout currently points.</td></tr>
+              <tr><td><code>cmd &gt; out.log 2&gt;&amp;1</code></td><td>Send both streams to the same file.</td></tr>
+              <tr><td><code>cmd &gt; /dev/null</code></td><td>Discard stdout. <code>/dev/null</code> is the bit bucket.</td></tr>
+              <tr><td><code>cmd1 | cmd2</code></td><td>Pipe stdout of cmd1 into stdin of cmd2.</td></tr>
+              <tr><td><code>cmd | tee file</code></td><td>Write to the terminal and to a file at the same time.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>A pipe connects processes; it does not create a temporary file. This is why pipelines can process enormous data with small memory footprints. Each stage should do one job well.</p>
+        <div class="code-label"><span>terminal · stdout, stderr, and a pipe</span></div>
+        <pre><code>ls /etc /does-not-exist &gt; /tmp/out.txt 2&gt; /tmp/err.txt
+cat /tmp/out.txt
+cat /tmp/err.txt
+grep -i error /var/log/messages | tail -n 5</code></pre>
+        <div class="callout note">
+          <div class="callout-title">Order matters</div>
+          <p><code>cmd 2&gt;&amp;1 &gt; file</code> does not do what most people expect. Redirections are evaluated left to right; send stdout first, then point stderr at it: <code>cmd &gt; file 2&gt;&amp;1</code>.</p>
+        </div>

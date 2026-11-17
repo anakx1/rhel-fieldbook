@@ -1,0 +1,11 @@
+<p>A directory is not necessarily part of the root filesystem. It can be the attachment point for a separate disk, an LVM volume, a network share, or a virtual filesystem. Ask the system what is mounted where:</p>
+        <div class="code-label"><span>terminal · see the mount landscape</span></div>
+        <pre><code>findmnt /
+df -hT
+lsblk -f</code></pre>
+        <p><code>findmnt</code> shows the mount tree. <code>df -hT</code> shows capacity and filesystem type in human units. <code>lsblk -f</code> shows block devices, their filesystems, labels, UUIDs, and mount points. Learning to read these three together is a core administration skill.</p>
+        <p>This is also how you diagnose "the disk is full" correctly. A full <code>/var</code> does not mean the root filesystem is full — it may be a separate volume. <code>df</code> reports filesystem-level usage; <code>du</code> reports the size of directories. You need both to find the culprit.</p>
+        <div class="callout warn">
+          <div class="callout-title">Do not delete from /var blindly</div>
+          <p>Logs, package caches, and application data live under <code>/var</code>. Deleting the wrong thing can break services or destroy evidence. Identify the owner and the retention policy first.</p>
+        </div>

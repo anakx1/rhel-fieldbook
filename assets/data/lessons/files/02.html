@@ -1,0 +1,24 @@
+<p><code>cp</code> copies content. <code>mv</code> renames or relocates. <code>rm</code> unlinks. The first two are generally reversible; the last one usually is not.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>Behavior</th></tr></thead>
+            <tbody>
+              <tr><td><code>cp file copy</code></td><td>Copy a file. Existing destination is overwritten without asking.</td></tr>
+              <tr><td><code>cp -i file copy</code></td><td>Prompt before overwriting.</td></tr>
+              <tr><td><code>cp -r dir newdir</code></td><td>Copy a directory recursively. Does not preserve ownership/timestamps by default.</td></tr>
+              <tr><td><code>cp -a dir backup</code></td><td>Archive mode: recursive, preserves mode, ownership where permitted, timestamps, links, and ACLs.</td></tr>
+              <tr><td><code>mv old new</code></td><td>Rename or move. Same-filesystem moves are metadata operations and are fast.</td></tr>
+              <tr><td><code>rm file</code></td><td>Remove a file. No trash can by default.</td></tr>
+              <tr><td><code>rm -i file</code></td><td>Prompt before removal.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>There is no recycle bin for the shell. Build the reflex of checking the target before pressing Enter:</p>
+        <div class="code-label"><span>terminal · a safer rm workflow</span></div>
+        <pre><code>ls -ld ~/lab/old-project
+rm -ri ~/lab/old-project</code></pre>
+        <p>Aliases can make <code>rm</code> interactive for your user, but aliases do not apply inside scripts, during <code>sudo</code>, or when another user runs the command. Safety has to live in the habit, not in an alias.</p>
+        <div class="callout warn">
+          <div class="callout-title">The two commands that end careers</div>
+          <p>Be extremely careful with <code>rm -rf</code> and <code>dd</code>. A misplaced space or an unset variable can widen the target. In scripts, quote paths and use <code>set -u</code> so an empty variable cannot become an empty path.</p>
+        </div>

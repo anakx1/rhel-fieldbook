@@ -1,3 +1,19 @@
+import {
+  store,
+  loadPersistedState,
+  saveState,
+  freshState,
+  replaceState,
+  setReviewCardsProvider,
+  normalizeScenarioRun,
+  normalizeReviewState,
+  normalizeExamState
+} from './app/state.js';
+import { parseRoute, setActiveNav, setTitle } from './app/router.js';
+import { createPalette } from './app/palette.js';
+import { createReview } from './app/review.js';
+import { createViews } from './app/views.js';
+
 /* ==========================================================================
    RHEL Fieldbook — application
    Vanilla JS SPA. No build step, no tracking, progress in localStorage.
@@ -6,280 +22,17 @@
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'rhel-fieldbook:v1';
   var app = document.getElementById('app');
   var header = document.getElementById('site-header');
   var toastEl = document.getElementById('toast');
   var toastTimer = null;
-  var activeNav = 'home';
   var currentRoute = { name: 'home' };
+  const palette = createPalette({ getCommands: function () { return getCommands(); }, closeNav: function () { closeNav(); }, esc: esc, icon: icon });
+  const review = createReview({ getCommands: function () { return getCommands(); }, esc: esc, icon: icon, saveState: saveState, showToast: showToast, renderRoute: function (opts) { return renderRoute(opts); } });
+  const views = createViews({ esc: esc, escAttr: escAttr, icon: icon, isLabDone: isLabDone, getCommands: function () { return getCommands(); }, coursePercent: coursePercent, rawCmd: rawCmd, totalCommands: totalCommands });
   var commandCache = null;
-  var reviewCardCache = null;
-  var reviewRevealed = false;
 
-  var DEFAULT_STATE = {
-    version: 1,
-    theme: 'light',
-    completedLessons: [],
-    objectives: {},
-    labSteps: {},
-    quiz: {},
-    quizVersion: 3,
-    labsDone: [],
-    lastLesson: null,
-    lastVisit: null,
-    scenarioRuns: {},
-    scenarioActive: null,
-    review: { version: 1, items: {}, active: null, lastSession: null, history: [] },
-    exam: { active: null, lastResult: null, history: [], learnerName: '' }
-  };
-
-  function freshState() {
-    return JSON.parse(JSON.stringify(DEFAULT_STATE));
-  }
-
-  var state = loadState();
-
-  /* ------------------------------------------------------------------------
-     Utilities
-     ------------------------------------------------------------------------ */
-
-  function loadState() {
-    var loaded;
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      loaded = raw ? Object.assign(freshState(), JSON.parse(raw)) : freshState();
-    } catch (e) {
-      loaded = freshState();
-    }
-    var migrated = migrateState(loaded);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated)); } catch (e) {}
-    return migrated;
-  }
-
-  /* Older saves stored quiz answers by the original option index. That is
-     still the storage format after the render-time shuffle, so valid answers
-     are preserved and anything malformed is dropped instead of breaking the
-     lesson renderer. */
-  function migrateState(input) {
-    var s = Object.assign(freshState(), input || {});
-    if (!s.quiz || typeof s.quiz !== 'object' || Array.isArray(s.quiz)) s.quiz = {};
-    Object.keys(s.quiz).forEach(function (lessonId) {
-      var lesson = RHEL.lessons[lessonId];
-      var answers = s.quiz[lessonId];
-      if (!lesson || !lesson.quiz || !answers || typeof answers !== 'object' || Array.isArray(answers)) {
-        delete s.quiz[lessonId];
-        return;
-      }
-      var clean = {};
-      Object.keys(answers).forEach(function (key) {
-        var qi = parseInt(key, 10);
-        var oi = parseInt(answers[key], 10);
-        var question = lesson.quiz[qi];
-        if (!isFinite(qi) || !isFinite(oi) || !question) return;
-        if (oi < 0 || oi >= question.options.length) return;
-        clean[qi] = oi;
-      });
-      if (Object.keys(clean).length) s.quiz[lessonId] = clean;
-      else delete s.quiz[lessonId];
-    });
-    s.quizVersion = 3;
-    s.scenarioRuns = isPlainObject(s.scenarioRuns) ? s.scenarioRuns : {};
-    Object.keys(s.scenarioRuns).forEach(function (id) {
-      var run = RHEL.scenarios.find(id) ? normalizeScenarioRun(s.scenarioRuns[id]) : null;
-      if (run) s.scenarioRuns[id] = run;
-      else delete s.scenarioRuns[id];
-    });
-    if (s.scenarioActive) {
-      var activeScenario = RHEL.scenarios.find(s.scenarioActive.id);
-      if (!activeScenario || !isFinite(Number(s.scenarioActive.startedAt))) s.scenarioActive = null;
-      else {
-        s.scenarioActive.startedAt = Number(s.scenarioActive.startedAt);
-        s.scenarioActive.hints = Math.max(0, Math.min(3, parseInt(s.scenarioActive.hints, 10) || 0));
-      }
-    }
-    s.review = normalizeReviewState(s.review);
-    s.exam = normalizeExamState(s.exam);
-    return s;
-  }
-
-  function clampNumber(value, min, max, fallback) {
-    var number = Number(value);
-    if (!isFinite(number)) number = fallback;
-    return Math.max(min, Math.min(max, number));
-  }
-
-  function safeTimestamp(value) {
-    return typeof value === 'string' && !isNaN(Date.parse(value)) ? value : new Date(0).toISOString();
-  }
-
-  function normalizeScenarioRun(value) {
-    if (!isPlainObject(value)) return null;
-    return {
-      attempts: Math.max(1, parseInt(value.attempts, 10) || 1),
-      bestScore: clampNumber(value.bestScore, 0, 100, 0),
-      bestSeconds: clampNumber(value.bestSeconds, 0, 365 * 24 * 60 * 60, 0),
-      lastScore: clampNumber(value.lastScore, 0, 100, 0),
-      lastSeconds: clampNumber(value.lastSeconds, 0, 365 * 24 * 60 * 60, 0),
-      lastHints: clampNumber(value.lastHints, 0, 3, 0),
-      lastCompletedAt: safeTimestamp(value.lastCompletedAt)
-    };
-  }
-
-  function normalizeReviewSession(value) {
-    if (!isPlainObject(value)) return null;
-    return {
-      completedAt: safeTimestamp(value.completedAt),
-      reviewed: Math.max(0, parseInt(value.reviewed, 10) || 0),
-      correct: Math.max(0, parseInt(value.correct, 10) || 0),
-      again: Math.max(0, parseInt(value.again, 10) || 0),
-      filter: value.filter === 'quiz' || value.filter === 'commands' ? value.filter : 'all',
-      durationSeconds: Math.max(0, parseInt(value.durationSeconds, 10) || 0)
-    };
-  }
-
-  function normalizeExamResult(value) {
-    if (!isPlainObject(value)) return null;
-    var questionIds = Array.isArray(value.questionIds)
-      ? value.questionIds.filter(function (id) { return !!RHEL.exam.question(id); })
-      : [];
-    var total = questionIds.length || Math.max(0, Math.min(100, parseInt(value.total, 10) || 0));
-    var correct = clampNumber(value.correct, 0, total || 100, 0);
-    var practicalPassed = value.practicalPassed === true;
-    var score = clampNumber(value.score, 0, 100, total ? Math.round(((correct + (practicalPassed ? 1 : 0)) / (total + 1)) * 100) : 0);
-    var answers = {};
-    if (isPlainObject(value.answers)) {
-      Object.keys(value.answers).forEach(function (id) {
-        var item = RHEL.exam.question(id);
-        var choice = parseInt(value.answers[id], 10);
-        if (item && isFinite(choice) && choice >= 0 && choice < item.question.options.length) answers[id] = choice;
-      });
-    }
-    var moduleStats = {};
-    RHEL.modules.forEach(function (module) {
-      var source = isPlainObject(value.moduleStats) && isPlainObject(value.moduleStats[module.id]) ? value.moduleStats[module.id] : {};
-      var moduleTotal = Math.max(0, parseInt(source.total, 10) || 0);
-      moduleStats[module.id] = {
-        id: module.id,
-        number: module.number,
-        title: module.title,
-        correct: clampNumber(source.correct, 0, moduleTotal, 0),
-        total: moduleTotal
-      };
-    });
-    var questionResults = Array.isArray(value.questionResults) ? value.questionResults.filter(function (item) {
-      return isPlainObject(item) && !!RHEL.exam.question(item.id);
-    }).map(function (item) {
-      var source = RHEL.exam.question(item.id);
-      return { id: item.id, lesson: source.lesson, module: source.module, qi: source.qi, chosen: item.chosen === null || item.chosen === undefined ? null : parseInt(item.chosen, 10), correct: item.correct === true };
-    }) : [];
-    return {
-      id: typeof value.id === 'string' ? value.id.slice(0, 80) : 'exam-imported',
-      completedAt: safeTimestamp(value.completedAt),
-      startedAt: Number(value.startedAt) || 0,
-      durationSeconds: clampNumber(value.durationSeconds, 0, 24 * 60 * 60, 0),
-      score: score,
-      correct: correct,
-      total: total,
-      practicalPassed: practicalPassed,
-      pass: score >= RHEL.exam.config.passScore && practicalPassed,
-      moduleStats: moduleStats,
-      questionResults: questionResults,
-      questionIds: questionIds,
-      answers: answers
-    };
-  }
-
-  function normalizeExamHistoryItem(value) {
-    if (!isPlainObject(value)) return null;
-    var practicalPassed = value.practicalPassed === true;
-    var score = clampNumber(value.score, 0, 100, 0);
-    return {
-      id: typeof value.id === 'string' ? value.id.slice(0, 80) : 'exam-imported',
-      completedAt: safeTimestamp(value.completedAt),
-      score: score,
-      correct: clampNumber(value.correct, 0, 100, 0),
-      total: clampNumber(value.total, 0, 100, 0),
-      practicalPassed: practicalPassed,
-      pass: score >= RHEL.exam.config.passScore && practicalPassed,
-      durationSeconds: clampNumber(value.durationSeconds, 0, 24 * 60 * 60, 0)
-    };
-  }
-
-  function normalizeReviewState(value) {
-    var review = { version: 1, items: {}, active: null, lastSession: null, history: [] };
-    if (!isPlainObject(value)) return review;
-    var cardMap = {};
-    getReviewCards().forEach(function (card) { cardMap[card.id] = card; });
-    if (isPlainObject(value.items)) {
-      Object.keys(value.items).forEach(function (id) {
-        var item = value.items[id];
-        if (!cardMap[id] || !isPlainObject(item)) return;
-        var box = parseInt(item.box, 10);
-        if (!isFinite(box)) box = 1;
-        review.items[id] = {
-          box: Math.max(1, Math.min(5, box)),
-          due: Number(item.due) || 0,
-          seen: Math.max(0, parseInt(item.seen, 10) || 0),
-          correct: Math.max(0, parseInt(item.correct, 10) || 0),
-          wrong: Math.max(0, parseInt(item.wrong, 10) || 0),
-          last: item.last ? Number(item.last) : null
-        };
-      });
-    }
-    if (isPlainObject(value.active) && Array.isArray(value.active.queue)) {
-      var queue = value.active.queue.filter(function (id) { return !!cardMap[id]; });
-      if (queue.length) {
-        review.active = {
-          queue: queue,
-          index: Math.max(0, Math.min(queue.length, parseInt(value.active.index, 10) || 0)),
-          filter: value.active.filter === 'quiz' || value.active.filter === 'commands' ? value.active.filter : 'all',
-          startedAt: Number(value.active.startedAt) || Date.now(),
-          correct: Math.max(0, parseInt(value.active.correct, 10) || 0),
-          again: Math.max(0, parseInt(value.active.again, 10) || 0)
-        };
-      }
-    }
-    if (isPlainObject(value.lastSession)) review.lastSession = normalizeReviewSession(value.lastSession);
-    if (Array.isArray(value.history)) {
-      review.history = value.history.map(normalizeReviewSession).filter(Boolean).slice(-20);
-    }
-    return review;
-  }
-
-  function normalizeExamState(value) {
-    var exam = { active: null, lastResult: null, history: [], learnerName: '' };
-    if (!isPlainObject(value)) return exam;
-    if (typeof value.learnerName === 'string') exam.learnerName = value.learnerName.slice(0, 80);
-    if (isPlainObject(value.active) && Array.isArray(value.active.questionIds) && value.active.questionIds.length) {
-      var validIds = value.active.questionIds.filter(function (id) { return !!RHEL.exam.question(id); });
-      if (validIds.length === value.active.questionIds.length) {
-        var answers = {};
-        if (isPlainObject(value.active.answers)) {
-          Object.keys(value.active.answers).forEach(function (id) {
-            var item = RHEL.exam.question(id);
-            var choice = parseInt(value.active.answers[id], 10);
-            if (item && isFinite(choice) && choice >= 0 && choice < item.question.options.length) answers[id] = choice;
-          });
-        }
-        exam.active = {
-          id: typeof value.active.id === 'string' ? value.active.id : 'exam-' + Date.now(),
-          questionIds: validIds,
-          answers: answers,
-          index: Math.max(0, Math.min(validIds.length, parseInt(value.active.index, 10) || 0)),
-          startedAt: Number(value.active.startedAt) || Date.now(),
-          endsAt: Number(value.active.endsAt) || (Date.now() + RHEL.exam.config.minutes * 60000)
-        };
-      }
-    }
-    if (isPlainObject(value.lastResult)) exam.lastResult = normalizeExamResult(value.lastResult);
-    if (Array.isArray(value.history)) exam.history = value.history.map(normalizeExamHistoryItem).filter(Boolean).slice(-10);
-    return exam;
-  }
-
-  function saveState() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
-  }
+  const state = store.state;
 
   function esc(value) {
     return String(value == null ? '' : value)
@@ -387,64 +140,6 @@
     return list;
   }
 
-  function getReviewCards() {
-    if (!reviewCardCache) reviewCardCache = RHEL.review.buildCards(getCommands());
-    return reviewCardCache;
-  }
-
-  function reviewDueCount(now) {
-    return RHEL.review.dueCount(getReviewCards(), state.review.items || {}, now || Date.now());
-  }
-
-  function reviewCardById(id) {
-    return getReviewCards().filter(function (card) { return card.id === id; })[0] || null;
-  }
-
-  function shuffleList(list) {
-    var copy = list.slice();
-    for (var i = copy.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var value = copy[i];
-      copy[i] = copy[j];
-      copy[j] = value;
-    }
-    return copy;
-  }
-
-  function reviewStats(now) {
-    var cards = getReviewCards();
-    var items = state.review.items || {};
-    var due = 0;
-    var fresh = 0;
-    var learning = 0;
-    var mature = 0;
-    var quizDue = 0;
-    var commandDue = 0;
-    cards.forEach(function (card) {
-      var item = items[card.id];
-      if (!item) fresh += 1;
-      else if (item.box >= 4) mature += 1;
-      else learning += 1;
-      if (RHEL.review.isDueToday(item, now || Date.now())) {
-        due += 1;
-        if (card.kind === 'quiz') quizDue += 1;
-        else commandDue += 1;
-      }
-    });
-    return { total: cards.length, due: due, fresh: fresh, learning: learning, mature: mature, quizDue: quizDue, commandDue: commandDue };
-  }
-
-  function updateReviewUI() {
-    var due = reviewDueCount();
-    document.querySelectorAll('[data-review-due]').forEach(function (el) {
-      el.textContent = due;
-      el.setAttribute('aria-label', due + ' review cards due today');
-    });
-    document.querySelectorAll('[data-review-due-label]').forEach(function (el) {
-      el.textContent = due === 1 ? '1 card due today' : due + ' cards due today';
-    });
-  }
-
   function scenarioRun(id) {
     return state.scenarioRuns && state.scenarioRuns[id] ? state.scenarioRuns[id] : null;
   }
@@ -533,6 +228,12 @@
     return { total: total, done: done, pct: total ? Math.round((done / total) * 100) : 0 };
   }
 
+  function getLevelProgress(level) {
+    var ids = (level.modules || []).reduce(function (list, module) { return list.concat(module.lessons || []); }, []);
+    var done = ids.filter(isComplete).length;
+    return { total: ids.length, done: done, pct: ids.length ? Math.round((done / ids.length) * 100) : 0 };
+  }
+
   function applyTheme(theme) {
     state.theme = theme === 'dark' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', state.theme);
@@ -560,7 +261,7 @@
     document.querySelectorAll('[data-completed-count]').forEach(function (el) { el.textContent = state.completedLessons.length; });
     document.querySelectorAll('[data-labs-count]').forEach(function (el) { el.textContent = state.labsDone.length; });
     document.querySelectorAll('[data-lesson-count-total]').forEach(function (el) { el.textContent = RHEL.lessonOrder.length; });
-    updateReviewUI();
+    review.updateUI();
   }
 
   function showToast(html, duration) {
@@ -582,15 +283,16 @@
     var nextNum = String(RHEL.getLessonNumber(next.id)).padStart(2, '0');
     var pct = coursePercent();
     var started = state.completedLessons.length > 0 || !!state.lastLesson;
-    var modules = RHEL.modules;
+    var modules = RHEL.allModules;
     var commandCount = totalCommands();
-    var review = reviewStats();
+    var reviewStatsData = review.stats();
     var incidentsDone = RHEL.scenarios.filter(function (scenario) { return !!scenarioRun(scenario.id); }).length;
     var lastExam = state.exam.lastResult;
 
     var levelRail = RHEL.levels.map(function (level, i) {
       var live = level.status === 'live';
-      var meta = live ? level.lessonsLabel || (RHEL.lessonOrder.length + ' lessons') : level.modules.length + ' modules';
+      var levelProgress = getLevelProgress(level);
+      var meta = live ? (levelProgress.total + ' lessons · ' + levelProgress.done + ' complete') : level.modules.length + ' modules';
       return `
         <a class="level-card ${live ? 'is-live' : ''}" href="${live ? '#/learn' : '#/roadmap'}">
           <span class="level-card-top">
@@ -611,7 +313,7 @@
             <span class="module-num">Module ${m.number}</span>
             <span class="module-duration">${esc(m.duration)}</span>
           </div>
-          <h3>${esc(m.title)}</h3>
+          <h3>${esc(m.title)} <span class="module-level-chip">L${esc(m.level || '01')}</span></h3>
           <p>${esc(m.blurb)}</p>
           <div class="module-lessons">
             ${m.lessons.map(function (id) {
@@ -715,8 +417,8 @@
       <section class="section section-border shell">
         <div class="section-head-row">
           <div>
-            <p class="eyebrow">Level 01 · Foundations</p>
-            <h2>Sixteen lessons. <em>Four modules.</em></h2>
+            <p class="eyebrow">Levels 01 &amp; 02 · live now</p>
+            <h2>Twenty-five lessons. <em>Ten modules.</em></h2>
           </div>
           <a class="text-link" href="#/learn">Open the curriculum ${icon('arrow', 14)}</a>
         </div>
@@ -742,9 +444,9 @@
           <a class="practice-card" href="#/review">
             <span class="practice-card-icon">${icon('target', 19)}</span>
             <span class="practice-card-kicker">Spaced review</span>
-            <h3><span data-review-due>${review.due}</span> cards due today.</h3>
+            <h3><span data-review-due>${reviewStatsData.due}</span> cards due today.</h3>
             <p>Quiz questions plus command flashcards in both directions. Five Leitner boxes keep the schedule honest.</p>
-            <span class="practice-card-meta">${review.total} cards · ${review.mature} mature ${icon('arrow', 12)}</span>
+            <span class="practice-card-meta">${reviewStatsData.total} cards · ${reviewStatsData.mature} mature ${icon('arrow', 12)}</span>
           </a>
           <a class="practice-card" href="#/exam">
             <span class="practice-card-icon">${icon('shield', 19)}</span>
@@ -845,7 +547,7 @@
           </details>
           <details class="faq-item">
             <summary>Can I learn without a server?</summary>
-            <div class="faq-answer"><p>Yes. A local VM with 2 vCPUs, 2–4 GB RAM, and 20 GB disk is enough for Level 01. The simulated terminal in this site is useful for recall, but labs that change the system should be done in a disposable VM.</p></div>
+            <div class="faq-answer"><p>Yes. A local VM with 2 vCPUs, 2–4 GB RAM, and 20 GB disk is enough for both live levels. The simulated terminal in this site is useful for recall, but labs that change the system should be done in a disposable VM.</p></div>
           </details>
           <details class="faq-item">
             <summary>Where is my progress stored?</summary>
@@ -881,29 +583,52 @@
 
   function viewLearn() {
     var pct = coursePercent();
-    var modules = RHEL.modules.map(function (m) {
-      var p = getModuleProgress(m);
+
+    var levelSections = RHEL.liveLevels.map(function (level) {
+      var progress = getLevelProgress(level);
+      var modules = level.modules.map(function (m) {
+        var p = getModuleProgress(m);
+        return `
+          <section class="module-block">
+            <header class="module-block-head">
+              <div class="module-block-num">${m.number}</div>
+              <div>
+                <h3>${esc(m.title)}</h3>
+                <p>${esc(m.blurb)}</p>
+              </div>
+              <div class="module-block-meta">${m.duration}<br>${p.done}/${p.total} complete</div>
+            </header>
+            ${m.lessons.map(function (id) {
+              var lesson = RHEL.lessons[id];
+              var done = isComplete(id);
+              return `
+                <a class="lesson-row ${done ? 'is-done' : ''}" href="#/lesson/${id}">
+                  <span class="lesson-row-num">${String(RHEL.getLessonNumber(id)).padStart(2, '0')}</span>
+                  <span class="lesson-row-main"><strong>${esc(lesson.title)}</strong><span>${esc(lesson.subtitle)}</span></span>
+                  <span class="lesson-row-duration">${lesson.minutes} min</span>
+                  <span class="lesson-row-status"><span class="status-dot"></span>${done ? 'Complete' : 'Open'}${icon('chevron', 13, 'lesson-row-arrow')}</span>
+                </a>`;
+            }).join('')}
+          </section>`;
+      }).join('');
+
       return `
-        <section class="module-block">
-          <header class="module-block-head">
-            <div class="module-block-num">${m.number}</div>
+        <section class="level-curriculum" aria-labelledby="level-${level.id}-title">
+          <header class="level-curriculum-head">
             <div>
-              <h3>${esc(m.title)}</h3>
-              <p>${esc(m.blurb)}</p>
+              <p class="eyebrow">Level ${level.id} · ${esc(level.kicker)}</p>
+              <h2 id="level-${level.id}-title">${esc(level.title)}</h2>
+              <p>${esc(level.promise)}</p>
             </div>
-            <div class="module-block-meta">${m.duration}<br>${p.done}/${p.total} complete</div>
+            <div class="level-curriculum-progress">
+              <strong>${progress.done}/${progress.total}</strong>
+              <span>lessons complete</span>
+              <div class="progress-panel-track"><span class="progress-panel-fill" style="width:${progress.pct}%"></span></div>
+              <small>${esc(level.cert)} · ${esc(level.duration)}</small>
+            </div>
           </header>
-          ${m.lessons.map(function (id) {
-            var lesson = RHEL.lessons[id];
-            var done = isComplete(id);
-            return `
-              <a class="lesson-row ${done ? 'is-done' : ''}" href="#/lesson/${id}">
-                <span class="lesson-row-num">${String(RHEL.getLessonNumber(id)).padStart(2, '0')}</span>
-                <span class="lesson-row-main"><strong>${esc(lesson.title)}</strong><span>${esc(lesson.subtitle)}</span></span>
-                <span class="lesson-row-duration">${lesson.minutes} min</span>
-                <span class="lesson-row-status"><span class="status-dot"></span>${done ? 'Complete' : 'Open'}${icon('chevron', 13, 'lesson-row-arrow')}</span>
-              </a>`;
-          }).join('')}
+          <div class="level-outcome-tags">${(level.outcomes || []).map(function (outcome) { return '<span class="topic-tag">' + esc(outcome) + '</span>'; }).join('')}</div>
+          ${modules}
         </section>`;
     }).join('');
 
@@ -912,13 +637,13 @@
       <section class="page-hero">
         <div class="shell page-hero-inner">
           <div>
-            <p class="eyebrow">Curriculum · Volume 01</p>
-            <h1>Foundations,<br><em>done properly.</em></h1>
-            <p class="lede">Sixteen lessons across four modules. Start with the shell and the filesystem, then build toward identity, services, storage, scripting, and a calm triage method. Every lesson has objectives, a command deck, a lab, and a checkpoint.</p>
+            <p class="eyebrow">Curriculum · ${RHEL.liveLevels.length} live volumes</p>
+            <h1>Foundations,<br><em>then operations.</em></h1>
+            <p class="lede">Level 01 builds the daily-driver habits. Level 02 adds the operator skills RHCSA actually tests: storage, access, services, packages, networking, and scheduled work. Every lesson has objectives, an EX200 map, a command deck, an automated lab, and a checkpoint.</p>
           </div>
           <div class="page-hero-aside">
             <div class="progress-panel">
-              <div class="progress-panel-row"><span>Level 01 progress</span><strong data-progress-percent>${pct}%</strong></div>
+              <div class="progress-panel-row"><span>Fieldbook progress</span><strong data-progress-percent>${pct}%</strong></div>
               <div class="progress-panel-track"><span class="progress-panel-fill" data-progress-bar style="width:${pct}%"></span></div>
               <small><span data-completed-count>${state.completedLessons.length}</span> of <span data-lesson-count-total>${RHEL.lessonOrder.length}</span> lessons complete · progress saved locally</small>
             </div>
@@ -928,10 +653,10 @@
 
       <div class="curriculum-body shell">
         <div class="curriculum-head">
-          <h2>The path through Level 01</h2>
+          <h2>The path through the fieldbook</h2>
           <p>Read the objective. Do the lab. Mark the lesson complete when you can explain the work without following along.</p>
         </div>
-        ${modules}
+        ${levelSections}
         <div class="progress-tools">
           <div class="progress-tools-copy">
             <strong>Progress tools</strong>
@@ -939,8 +664,9 @@
           </div>
           <div class="progress-tools-actions">
             <a class="text-link" href="#/labs">Browse all ${RHEL.lessonOrder.length} labs ${icon('arrow', 14)}</a>
+            <a class="text-link" href="#/cheatsheets">Printable cheat sheets ${icon('arrow', 14)}</a>
             <a class="text-link" href="#/mastery">Objective mastery ${icon('arrow', 14)}</a>
-            <a class="text-link" href="#/review">Review · <span data-review-due>${reviewDueCount()}</span> due ${icon('arrow', 14)}</a>
+            <a class="text-link" href="#/review">Review · <span data-review-due>${review.dueCount()}</span> due ${icon('arrow', 14)}</a>
             <button class="btn btn-sm btn-ghost" data-export-progress>${icon('download', 13)} Export progress</button>
             <button class="btn btn-sm btn-ghost" data-import-progress>${icon('upload', 13)} Import progress</button>
             <input type="file" accept="application/json,.json" data-import-file hidden>
@@ -951,10 +677,10 @@
         <div style="margin-top:64px;">
           <div class="curriculum-head">
             <h2>Next volumes</h2>
-            <p>Foundations is the on-ramp. The complete objective map continues through operator work, administration, automation, and production design.</p>
+            <p>The path continues into administration, automation, and production design.</p>
           </div>
           <div class="level-outline-grid">
-            ${RHEL.levels.slice(1).map(function (level) {
+            ${RHEL.levels.filter(function (level) { return level.status !== 'live'; }).map(function (level) {
               return `
                 <article class="level-outline-card">
                   <div class="level-outline-card-top">
@@ -978,10 +704,11 @@
      ------------------------------------------------------------------------ */
 
   function lessonNavMarkup(currentId) {
-    return RHEL.modules.map(function (m) {
-      return `
+    return RHEL.liveLevels.map(function (level) {
+      return level.modules.map(function (m) {
+        return `
         <div class="lesson-nav-group">
-          <span>Module ${m.number} · ${esc(m.title)}</span>
+          <span>L${esc(level.id)} · Module ${m.number} · ${esc(m.title)}</span>
           ${m.lessons.map(function (id) {
             var l = RHEL.lessons[id];
             return `<a class="lesson-nav-link ${id === currentId ? 'is-active' : ''} ${isComplete(id) ? 'is-done' : ''}" href="#/lesson/${id}">
@@ -991,6 +718,7 @@
             </a>`;
           }).join('')}
         </div>`;
+      }).join('');
     }).join('');
   }
 
@@ -1015,6 +743,28 @@
     var sections = lesson.sections.map(function (s, i) {
       return { title: s.title, id: 's' + (i + 1), body: s.body };
     });
+    var level = RHEL.getLevel(module.level || lesson.level || '01');
+    var examById = {};
+    (RHEL.ex200 || []).forEach(function (objective) { examById[objective.id] = objective; });
+    var ex200Markup = Array.isArray(lesson.ex200) && lesson.ex200.length ? `
+      <section class="ex200-map" aria-labelledby="ex200-title">
+        <div class="ex200-map-head">
+          <div><p class="eyebrow">Certification alignment</p><h2 id="ex200-title">EX200 objective map</h2></div>
+          <span class="badge">RHCSA</span>
+        </div>
+        <p>Each lesson objective maps to a published EX200 skill area. The evidence column is what you should be able to demonstrate without notes.</p>
+        <div class="table-wrap"><table><thead><tr><th>Lesson objective</th><th>EX200 objective</th><th>Evidence you can show</th></tr></thead><tbody>
+          ${lesson.ex200.map(function (mapping) {
+            var exam = examById[mapping.exam];
+            return `<tr><td>${esc(lesson.objectives[mapping.objective] || '')}</td><td><strong>${esc(exam ? exam.title : mapping.exam)}</strong></td><td>${esc(mapping.evidence || '')}</td></tr>`;
+          }).join('')}
+        </tbody></table></div>
+      </section>` : '';
+    var versionMarkup = Array.isArray(lesson.versionNotes) && lesson.versionNotes.length ? `
+      <section class="version-notes" aria-labelledby="version-title">
+        <div class="version-notes-head"><span class="version-badge">9</span><span class="version-arrow">→</span><span class="version-badge">10</span><h2 id="version-title">RHEL 9 and RHEL 10 differences</h2></div>
+        <ul>${lesson.versionNotes.map(function (note) { return '<li>' + esc(note) + '</li>'; }).join('')}</ul>
+      </section>` : '';
 
     var objectivesMarkup = lesson.objectives.map(function (o, i) {
       var checked = objectives.indexOf(i) !== -1;
@@ -1081,7 +831,7 @@
       <div class="shell">
         <div class="lesson-layout">
           <aside class="lesson-nav" aria-label="Lesson navigation">
-            <div class="lesson-nav-head"><span>Level 01</span><span>${index}/${RHEL.lessonOrder.length}</span></div>
+            <div class="lesson-nav-head"><span>Level ${esc(level ? level.id : '01')}</span><span>${index}/${RHEL.lessonOrder.length}</span></div>
             ${lessonNavMarkup(id)}
           </aside>
 
@@ -1094,13 +844,13 @@
             <header class="lesson-header">
               <nav class="breadcrumb" aria-label="Breadcrumb">
                 <a href="#/learn">Curriculum</a><span class="slash">/</span>
-                <a href="#/learn">Module ${module.number}</a><span class="slash">/</span>
+                <a href="#/learn">Level ${esc(level ? level.id : '01')} · Module ${module.number}</a><span class="slash">/</span>
                 <span>Lesson ${String(index).padStart(2, '0')}</span>
               </nav>
               <h1 class="lesson-title">${esc(lesson.title)}</h1>
               <p class="lesson-deck">${esc(lesson.subtitle)}</p>
               <div class="lesson-meta">
-                <span class="meta-chip level">Level 01 · ${esc(module.title)}</span>
+                <span class="meta-chip level">Level ${esc(level ? level.id : '01')} · ${esc(module.title)}</span>
                 <span class="meta-chip">${icon('clock', 11)} ${lesson.minutes} min</span>
                 <span class="meta-chip">${esc(lesson.difficulty)}</span>
                 <span class="meta-chip"><span class="meta-dot"></span> ${isComplete(id) ? 'Completed' : 'In progress'}</span>
@@ -1113,6 +863,9 @@
               <div class="objective-list">${objectivesMarkup}</div>
               <div class="objectives-count"><span data-objective-count="${id}">${objectives.length}</span> of ${lesson.objectives.length} objectives checked</div>
             </section>
+
+            ${versionMarkup}
+            ${ex200Markup}
 
             <div class="prose">
               ${sections.map(function (s) {
@@ -1165,6 +918,10 @@
               <p class="rail-title">In this lesson</p>
               <ul class="toc">${toc}</ul>
             </div>
+            <div class="rail-block">
+              <p class="rail-title">Print</p>
+              <a class="text-link" href="#/cheatsheets">Cheat sheet for every lesson ${icon('arrow', 13)}</a>
+            </div>
             <div class="rail-card">
               <p class="rail-title">Lesson state</p>
               <div class="rail-stat"><span>Objectives</span><strong><span data-objective-count="${id}">${objectives.length}</span>/${lesson.objectives.length}</strong></div>
@@ -1183,222 +940,7 @@
   }
 
   /* ------------------------------------------------------------------------
-     Labs
-     ------------------------------------------------------------------------ */
-
-  function viewLabs() {
-    var labs = RHEL.lessonOrder.map(function (id) {
-      var l = RHEL.lessons[id];
-      var m = RHEL.getModule(l.module);
-      return { lesson: l, module: m, done: isLabDone(id) };
-    });
-    var doneCount = labs.filter(function (l) { return l.done; }).length;
-
-    return `
-    <div class="view">
-      <section class="page-hero">
-        <div class="shell page-hero-inner">
-          <div>
-            <p class="eyebrow">Hands-on · Level 01</p>
-            <h1>Labs that <em>prove it.</em></h1>
-            <p class="lede">Reading creates recognition. Labs create recall. Every lab has a scenario, explicit steps, and a verification checkpoint. Use a disposable VM and take a snapshot first.</p>
-          </div>
-          <div class="page-hero-aside">
-            <div class="progress-panel">
-              <div class="progress-panel-row"><span>Labs completed</span><strong><span data-labs-count>${doneCount}</span> / ${labs.length}</strong></div>
-              <div class="progress-panel-track"><span class="progress-panel-fill" style="width:${Math.round((doneCount / labs.length) * 100)}%"></span></div>
-              <small>Step checklists are saved locally. Mark a lab complete when every step verifies.</small>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div class="labs-page shell">
-        <div class="filter-bar">
-          <span class="filter-label">Filter</span>
-          <button class="filter-chip is-active" data-lab-filter="all">All labs</button>
-          ${RHEL.modules.map(function (m) { return `<button class="filter-chip" data-lab-filter="${m.id}">${m.number} · ${esc(m.title)}</button>`; }).join('')}
-        </div>
-        <div class="lab-grid" id="lab-grid">
-          ${labs.map(function (item) {
-            var l = item.lesson;
-            return `<article class="lab-card ${item.done ? 'is-done' : ''}" data-lab-card data-module="${l.module}">
-              <div class="lab-card-top">
-                <span class="lab-card-module">Module ${item.module.number} · ${esc(item.module.title)}</span>
-                ${item.done ? '<span class="badge badge-green">Complete</span>' : '<span class="badge">Lab</span>'}
-              </div>
-              <h3>${esc(l.lab.title)}</h3>
-              <p>${esc(l.lab.scenario)}</p>
-              <div class="lab-card-meta"><span>${icon('clock', 11)} ${l.lab.minutes} min</span><span>${icon('terminal', 11)} ${l.lab.steps.length} steps</span><span>Lesson ${String(RHEL.getLessonNumber(l.id)).padStart(2, '0')}</span></div>
-              <a class="lab-card-link" href="#/lesson/${l.id}/lab"><span>Open the lab</span>${icon('arrow', 14)}</a>
-            </article>`;
-          }).join('')}
-          <div class="empty-state" id="labs-empty" hidden>No labs in this module yet.</div>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  /* ------------------------------------------------------------------------
-     Command index
-     ------------------------------------------------------------------------ */
-
-  function viewCommands() {
-    var commands = getCommands();
-    var categories = [];
-    commands.forEach(function (c) { if (categories.indexOf(c.category) === -1) categories.push(c.category); });
-    categories.sort();
-
-    function actionButtons(c) {
-      return `<div class="command-actions">
-        <button class="icon-action" data-copy="${escAttr(c.cmd)}" aria-label="Copy ${escAttr(c.cmd)}" title="Copy">${icon('copy', 12)}</button>
-        <button class="icon-action" data-try="${escAttr(c.cmd)}" aria-label="Try ${escAttr(c.cmd)} in sandbox" title="Try in sandbox">${icon('play', 12)}</button>
-      </div>`;
-    }
-
-    var rows = commands.map(function (c) {
-      var haystack = [c.cmd, c.desc, c.category, c.lessonTitle].join(' ').toLowerCase();
-      return `<tr data-command-row data-cat="${escAttr(c.category)}" data-search="${escAttr(haystack)}">
-        <td><code>${esc(c.cmd)}</code></td>
-        <td class="cmd-desc">${esc(c.desc)}</td>
-        <td class="cmd-cat">${esc(c.category)}</td>
-        <td><a class="cmd-lesson" href="#/lesson/${c.lesson}">${esc(c.lessonTitle)}</a></td>
-        <td>${actionButtons(c)}</td>
-      </tr>`;
-    }).join('');
-
-    var mobile = commands.map(function (c) {
-      var haystack = [c.cmd, c.desc, c.category, c.lessonTitle].join(' ').toLowerCase();
-      return `<article class="command-mobile-card" data-command-row data-cat="${escAttr(c.category)}" data-search="${escAttr(haystack)}">
-        <code>${esc(c.cmd)}</code>
-        <p>${esc(c.desc)}</p>
-        <div class="command-mobile-foot"><a href="#/lesson/${c.lesson}">${esc(c.lessonTitle)}</a>${actionButtons(c)}</div>
-      </article>`;
-    }).join('');
-
-    return `
-    <div class="view">
-      <section class="page-hero">
-        <div class="shell page-hero-inner">
-          <div>
-            <p class="eyebrow">Reference · built from the lessons</p>
-            <h1>The command <em>index.</em></h1>
-            <p class="lede">Every command in Level 01, deduplicated and linked back to the lesson that explains it. Copy it, try it in the sandbox, then run it in your lab.</p>
-          </div>
-          <div class="page-hero-aside">
-            <div class="progress-panel">
-              <div class="progress-panel-row"><span>Commands indexed</span><strong>${commands.length}</strong></div>
-              <div class="progress-panel-track"><span class="progress-panel-fill" style="width:100%"></span></div>
-              <small>${categories.length} categories · RHEL 9 &amp; 10 oriented</small>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div class="commands-page shell">
-        <div class="command-toolbar">
-          <div class="command-search">
-            ${icon('search', 17)}
-            <input type="search" id="command-search" placeholder="Search commands, descriptions, or lessons…" autocomplete="off" aria-label="Search commands">
-          </div>
-          <div class="command-count"><strong id="command-count">${commands.length}</strong> commands shown</div>
-        </div>
-        <div class="command-categories" id="command-categories">
-          <button class="filter-chip is-active" data-command-category="all">All</button>
-          ${categories.map(function (c) { return `<button class="filter-chip" data-command-category="${escAttr(c)}">${esc(c)}</button>`; }).join('')}
-        </div>
-        <div class="command-table-wrap">
-          <table class="command-table">
-            <thead><tr><th>Command</th><th>What it does</th><th>Category</th><th>Lesson</th><th></th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-        <div class="command-mobile-list">${mobile}</div>
-        <div class="command-empty" id="command-empty" hidden>No commands match that filter. Try a broader term.</div>
-      </div>
-    </div>`;
-  }
-
-  /* ------------------------------------------------------------------------
-     Roadmap
-     ------------------------------------------------------------------------ */
-
-  function viewRoadmap() {
-    var levels = RHEL.levels.map(function (level) {
-      var live = level.status === 'live';
-      var modules = level.modules.map(function (m) {
-        var desc = live ? (m.lessons.length + ' lessons · ' + m.duration) : (m.desc || '');
-        return `<div class="roadmap-module"><strong>${esc(m.title)}</strong><span>${esc(desc)}</span></div>`;
-      }).join('');
-      return `
-        <section class="roadmap-level ${live ? 'is-live' : ''}">
-          <div class="roadmap-marker"><span class="num">${level.id}</span><span class="state">${live ? 'Live' : 'Mapped'}</span></div>
-          <div class="roadmap-card">
-            <div class="roadmap-card-head">
-              <div><p class="eyebrow" style="margin-bottom:10px;">${esc(level.kicker)}</p><h2>${esc(level.title)}</h2></div>
-              <span class="badge ${live ? 'badge-red' : ''}">${live ? 'Available now' : 'Next volume'}</span>
-            </div>
-            <p class="promise">${esc(level.promise)}</p>
-            <div class="outcome-chips">${level.outcomes.map(function (o) { return '<span class="outcome-chip">' + esc(o) + '</span>'; }).join('')}</div>
-            <div class="roadmap-modules">${modules}</div>
-            ${live ? '<div class="roadmap-cta"><a class="btn btn-primary btn-sm" href="#/learn">Open Level 01 ' + icon('arrow', 13) + '</a></div>' : ''}
-          </div>
-        </section>`;
-    }).join('');
-
-    return `
-    <div class="view">
-      <section class="page-hero">
-        <div class="shell page-hero-inner">
-          <div>
-            <p class="eyebrow">The full path · zero to production</p>
-            <h1>One map.<br><em>Five levels.</em></h1>
-            <p class="lede">The complete objective map for enterprise Linux: foundations, operations, administration, automation, and production design. Level 01 is live now; later volumes are mapped so you can see where each skill is going.</p>
-          </div>
-          <div class="page-hero-aside">
-            <div class="progress-panel">
-              <div class="progress-panel-row"><span>Current volume</span><strong>01</strong></div>
-              <div class="progress-panel-track"><span class="progress-panel-fill" style="width:${coursePercent()}%"></span></div>
-              <small>${state.completedLessons.length} of ${RHEL.lessonOrder.length} Foundations lessons complete</small>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div class="shell roadmap">
-        <div class="roadmap-intro">
-          <div>
-            <p class="eyebrow">Why this order</p>
-            <h2>Fluency before <em>complexity.</em></h2>
-            <p>Every later skill depends on the layer below it. Automation is fragile without permissions literacy. High availability is dangerous without storage fluency. The sequence is deliberate: each level assumes the habits of the previous one.</p>
-          </div>
-          <div class="roadmap-note"><strong>Not an official certification guide.</strong> The path is aligned with the skills RHCSA, RHCE, and RHCA tracks test, but objectives change. Verify the current official exam objectives before you book.</div>
-        </div>
-
-        ${levels}
-
-        <section class="cert-map">
-          <div class="section-head">
-            <div><p class="eyebrow">Certification context</p><h2>Where the path <em>maps.</em></h2></div>
-            <p>Certifications are checkpoints, not the destination. Use them to structure study; use the lab habits to keep the job.</p>
-          </div>
-          <div class="cert-grid">
-            ${RHEL.certifications.map(function (c) {
-              return `<article class="cert-card">
-                <span class="cert-code">${esc(c.code)}</span>
-                <h3>${esc(c.name)}</h3>
-                <p>${esc(c.range)} · ${esc(c.desc)}</p>
-                <ul>${c.topics.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('')}</ul>
-              </article>`;
-            }).join('')}
-          </div>
-        </section>
-      </div>
-    </div>`;
-  }
-
-  /* ------------------------------------------------------------------------
-     Broken Systems scenarios
+     Broken Systems
      ------------------------------------------------------------------------ */
 
   function viewScenarios(id) {
@@ -1573,172 +1115,6 @@
   }
 
   /* ------------------------------------------------------------------------
-     Spaced review
-     ------------------------------------------------------------------------ */
-
-  function viewReview(section) {
-    if (section === 'session') return viewReviewSession();
-    var stats = reviewStats();
-    var active = state.review.active;
-    var last = state.review.lastSession;
-    var commandMature = getReviewCards().filter(function (card) {
-      return card.kind === 'command' && state.review.items[card.id] && state.review.items[card.id].box >= 4;
-    }).length;
-
-    return `
-    <div class="view">
-      <section class="page-hero">
-        <div class="shell page-hero-inner">
-          <div>
-            <p class="eyebrow">Review · spaced repetition</p>
-            <h1>Remember it<br><em>tomorrow.</em></h1>
-            <p class="lede">Checkpoint questions return at widening intervals. Every command in the index becomes a two-way flashcard: command to meaning, and meaning to command. Five boxes, no streak guilt, no account.</p>
-            <div class="hero-actions" style="margin-top:26px;">
-              <button class="btn btn-primary" data-start-review="all">Start due review ${icon('play', 14)}</button>
-              <a class="btn btn-ghost" href="#/mastery">Objective mastery ${icon('target', 15)}</a>
-            </div>
-          </div>
-          <div class="page-hero-aside">
-            <div class="progress-panel">
-              <div class="progress-panel-row"><span>Due today</span><strong data-review-due>${stats.due}</strong></div>
-              <div class="progress-panel-track"><span class="progress-panel-fill" style="width:${stats.total ? Math.round(stats.due / stats.total * 100) : 0}%"></span></div>
-              <small>${stats.fresh} new · ${stats.learning} learning · ${stats.mature} mature</small>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div class="review-page shell">
-        ${active ? `<div class="review-resume">
-          <div><p class="eyebrow">Session in progress</p><strong>${active.queue.length - active.index} cards left · ${active.correct} correct · ${active.again} again</strong></div>
-          <a class="btn btn-sm btn-primary" href="#/review/session">Resume session ${icon('arrow', 13)}</a>
-        </div>` : ''}
-        ${last ? `<div class="review-last"><span>Last session: ${last.reviewed} cards reviewed · ${last.correct} correct · ${last.again} again</span><span>${new Date(last.completedAt).toLocaleDateString()}</span></div>` : ''}
-
-        <div class="review-stat-grid">
-          <article class="review-stat"><span>Total cards</span><strong>${stats.total}</strong><small>${stats.quizDue} quiz cards due · ${stats.commandDue} command cards due</small></article>
-          <article class="review-stat"><span>Due today</span><strong data-review-due>${stats.due}</strong><small>New cards count as due</small></article>
-          <article class="review-stat"><span>Mature</span><strong>${stats.mature}</strong><small>${commandMature} command directions in box 4+</small></article>
-          <article class="review-stat"><span>Mastery map</span><strong>80</strong><small>Objectives with quiz and lab evidence</small></article>
-        </div>
-
-        <div class="review-options">
-          <article class="review-option">
-            <span class="review-option-icon">${icon('target', 20)}</span>
-            <h2>Due review</h2>
-            <p>Mix checkpoint questions and both flashcard directions. The queue is capped at 20 cards per session.</p>
-            <button class="btn btn-primary btn-sm" data-start-review="all">Review everything ${icon('arrow', 13)}</button>
-          </article>
-          <article class="review-option">
-            <span class="review-option-icon">${icon('book', 20)}</span>
-            <h2>Quiz only</h2>
-            <p>${stats.quizDue} checkpoint questions are due today. Good for a short recall pass before the exam.</p>
-            <button class="btn btn-ghost btn-sm" data-start-review="quiz">Review quiz cards</button>
-          </article>
-          <article class="review-option">
-            <span class="review-option-icon">${icon('terminal', 20)}</span>
-            <h2>Commands both ways</h2>
-            <p>${stats.commandDue} command directions due. See a command and recall what it does — then reverse it.</p>
-            <button class="btn btn-ghost btn-sm" data-start-review="commands">Review commands</button>
-          </article>
-        </div>
-
-        <section class="review-explainer">
-          <div><p class="eyebrow">How the boxes work</p><h2>Short intervals.<br><em>Long memory.</em></h2></div>
-          <div class="review-boxes">
-            ${['Again → 10 min', 'Box 2 → 1 day', 'Box 3 → 3 days', 'Box 4 → 7 days', 'Box 5 → 21 days'].map(function (text, index) { return `<span class="review-box ${index === 0 ? 'is-start' : ''}"><strong>${index + 1}</strong>${text}</span>`; }).join('')}
-          </div>
-          <p class="review-source">Quiz cards come from the 48 checkpoint questions. Command cards come from the deduplicated command index, generated in both directions. Everything is stored locally and included in the progress export.</p>
-        </section>
-      </div>
-    </div>`;
-  }
-
-  function viewReviewSession() {
-    var active = state.review.active;
-    if (!active) {
-      var last = state.review.lastSession;
-      return `
-      <div class="view">
-        <section class="page-hero">
-          <div class="shell page-hero-inner"><div>
-            <div class="breadcrumb"><a href="#/review">Review</a><span class="slash">/</span><span>Session</span></div>
-            <p class="eyebrow">Review session</p>
-            <h1>${last ? 'Session <em>complete.</em>' : 'No session <em>running.</em>'}</h1>
-            <p class="lede">${last ? 'You reviewed ' + last.reviewed + ' cards, marked ' + last.correct + ' correct, and sent ' + last.again + ' back to box 1. The schedule has already updated.' : 'Start a session from the review dashboard. Due cards are waiting.'}</p>
-            <div class="hero-actions" style="margin-top:26px;"><a class="btn btn-primary" href="#/review">Back to review ${icon('arrow', 14)}</a><button class="btn btn-ghost" data-start-review="all">Start another session</button></div>
-          </div></div>
-        </section>
-      </div>`;
-    }
-
-    if (active.index >= active.queue.length) {
-      return viewReviewSessionSummary(active);
-    }
-
-    var card = reviewCardById(active.queue[active.index]);
-    if (!card) return viewReview('');
-    var answerMarkup = card.kind === 'command' && card.direction === 'reverse'
-      ? '<code>' + esc(card.answer) + '</code>'
-      : esc(card.answer);
-    var promptMarkup = card.kind === 'command' && card.direction === 'forward'
-      ? '<code>' + esc(card.prompt) + '</code>'
-      : esc(card.prompt);
-    var pct = Math.round((active.index / active.queue.length) * 100);
-    var filterLabel = active.filter === 'quiz' ? 'Quiz only' : active.filter === 'commands' ? 'Commands only' : 'Mixed review';
-
-    return `
-    <div class="view">
-      <div class="review-session shell">
-        <h1 class="sr-only">Review session</h1>
-        <div class="review-session-top">
-          <div class="breadcrumb"><a href="#/review">Review</a><span class="slash">/</span><span>${esc(filterLabel)}</span></div>
-          <div class="review-session-progress"><span>${active.index + 1} / ${active.queue.length}</span><span>${active.correct} correct</span><span>${active.again} again</span></div>
-          <div class="progress-panel-track"><span class="progress-panel-fill" style="width:${pct}%"></span></div>
-        </div>
-
-        <article class="review-card" id="review-card-focus" tabindex="-1" aria-labelledby="review-prompt-label">
-          <div class="review-card-meta">
-            <span class="badge">${esc(card.label)}</span>
-            <span>${esc(card.lessonTitle)}</span>
-            <span>${esc(card.kind === 'quiz' ? 'Checkpoint' : card.category || 'Command index')}</span>
-          </div>
-          <p class="eyebrow" id="review-prompt-label">${card.kind === 'quiz' ? 'Question' : card.direction === 'forward' ? 'What does this command do?' : 'Which command does this?'}</p>
-          <div class="review-prompt">${promptMarkup}</div>
-          <div class="review-answer ${reviewRevealed ? 'is-visible' : ''}" aria-live="polite">
-            ${reviewRevealed ? `<span class="review-answer-label">Answer</span><div class="review-answer-main">${answerMarkup}</div><p>${esc(card.detail || '')}</p>` : '<span>Answer hidden. Recall it before revealing.</span>'}
-          </div>
-          <div class="review-card-actions">
-            ${reviewRevealed
-              ? `<button class="btn btn-ghost" data-review-grade="again">Again <kbd>1</kbd></button><button class="btn btn-primary" data-review-grade="good">Got it <kbd>2</kbd></button>`
-              : `<button class="btn btn-primary" data-review-reveal>Reveal answer <kbd>space</kbd></button>`}
-          </div>
-          <div class="review-keyboard-hint">Keyboard: <kbd>space</kbd> reveal · <kbd>1</kbd> again · <kbd>2</kbd> got it</div>
-        </article>
-
-        <div class="review-session-foot">
-          <a class="text-link" href="#/review">Pause and return later ${icon('arrow', 13)}</a>
-          <span>${active.queue.length - active.index - 1} cards after this one</span>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  function viewReviewSessionSummary(active) {
-    return `
-    <div class="view">
-      <section class="page-hero">
-        <div class="shell page-hero-inner"><div>
-          <p class="eyebrow">Review session · complete</p>
-          <h1>${active.correct} correct.<br><em>${active.again} back in the queue.</em></h1>
-          <p class="lede">The cards you marked "again" return in ten minutes. Cards you knew move outward through the boxes. Small, regular passes beat one heroic reread.</p>
-          <div class="hero-actions" style="margin-top:26px;"><a class="btn btn-primary" href="#/review">Back to review ${icon('arrow', 14)}</a><button class="btn btn-ghost" data-start-review="all">Review more due cards</button></div>
-        </div></div>
-      </section>
-    </div>`;
-  }
-
-  /* ------------------------------------------------------------------------
      Objective mastery
      ------------------------------------------------------------------------ */
 
@@ -1774,7 +1150,8 @@
         ${lessons}
       </section>`;
     }).join('');
-    var total = RHEL.lessonOrder.reduce(function (sum, id) { return sum + RHEL.lessons[id].objectives.length; }, 0);
+    var level01Ids = RHEL.modules.reduce(function (list, module) { return list.concat(module.lessons || []); }, []);
+    var total = level01Ids.reduce(function (sum, id) { return sum + RHEL.lessons[id].objectives.length; }, 0);
     var mastered = counts.mastered || 0;
     var pct = total ? Math.round(mastered / total * 100) : 0;
 
@@ -1856,7 +1233,7 @@
             <p class="eyebrow">Before the clock starts</p>
             <h2>What this exam <em>tests.</em></h2>
             <div class="exam-rule-grid">
-              <article><span>01</span><h3>30 checkpoint questions</h3><p>Drawn from all 16 lessons, balanced across the four modules. Roughly two questions per lesson.</p></article>
+              <article><span>01</span><h3>30 checkpoint questions</h3><p>Drawn from the 16 Foundations lessons, balanced across the four modules. Roughly two questions per lesson.</p></article>
               <article><span>02</span><h3>One live practical</h3><p>${esc(RHEL.exam.practical.title)}. The sandbox checks users, groups, ownership, and mode.</p></article>
               <article><span>03</span><h3>${config.minutes} minutes</h3><p>The timer runs while you work, including the practical. At zero, the exam submits automatically.</p></article>
               <article><span>04</span><h3>Skills breakdown</h3><p>Your result shows accuracy per module, the practical result, and a printable certificate at ${config.passScore}% or above.</p></article>
@@ -2060,87 +1437,23 @@
   }
 
   /* ------------------------------------------------------------------------
-     Routing
+     Printable cheat sheets
      ------------------------------------------------------------------------ */
-
-  function parseRoute() {
-    var raw = location.hash.replace(/^#/, '');
-    if (!raw || raw === '/') return { name: 'home' };
-    var parts = raw.replace(/^\//, '').split('/').filter(Boolean);
-    var name = parts[0] || 'home';
-    if (name === 'lesson') {
-      return { name: 'lesson', id: parts[1] || '', section: parts[2] || '' };
-    }
-    if (name === 'scenarios') {
-      return { name: 'scenarios', id: parts[1] || '' };
-    }
-    if (name === 'review') {
-      return { name: 'review', section: parts[1] || '' };
-    }
-    if (name === 'exam') {
-      return { name: 'exam', section: parts[1] || '' };
-    }
-    if (name === 'mastery') {
-      return { name: 'mastery' };
-    }
-    if (['learn', 'roadmap', 'labs', 'commands'].indexOf(name) !== -1) {
-      return { name: name };
-    }
-    return { name: 'notfound' };
-  }
-
-  function setActiveNav(name) {
-    activeNav = name === 'lesson' ? 'learn' : name === 'mastery' ? 'review' : name;
-    document.querySelectorAll('[data-nav]').forEach(function (link) {
-      link.classList.toggle('is-active', link.getAttribute('data-nav') === activeNav);
-      if (link.getAttribute('data-nav') === activeNav) link.setAttribute('aria-current', 'page');
-      else link.removeAttribute('aria-current');
-    });
-  }
-
-  function setTitle(route) {
-    var title = 'RHEL Fieldbook — From first prompt to production';
-    if (route.name === 'learn') title = 'Foundations · RHEL Fieldbook';
-    if (route.name === 'labs') title = 'Labs · RHEL Fieldbook';
-    if (route.name === 'commands') title = 'Command index · RHEL Fieldbook';
-    if (route.name === 'roadmap') title = 'The full path · RHEL Fieldbook';
-    if (route.name === 'scenarios') {
-      var scenario = route.id ? RHEL.scenarios.find(route.id) : null;
-      title = scenario ? scenario.title + ' · Broken Systems' : 'Broken Systems · RHEL Fieldbook';
-    }
-    if (route.name === 'review') title = route.section === 'session' ? 'Review session · RHEL Fieldbook' : 'Review · RHEL Fieldbook';
-    if (route.name === 'exam') {
-      title = state.exam.active && route.section !== 'result'
-        ? 'Final exam in progress · RHEL Fieldbook'
-        : route.section === 'result' && state.exam.lastResult
-          ? 'Final exam result · RHEL Fieldbook'
-          : 'Final exam · RHEL Fieldbook';
-    }
-    if (route.name === 'mastery') title = 'Objective mastery · RHEL Fieldbook';
-    if (route.name === 'lesson') {
-      var lesson = RHEL.getLesson(route.id);
-      if (lesson) title = lesson.title + ' · RHEL Fieldbook';
-    }
-    if (route.name === 'notfound') title = 'Not found · RHEL Fieldbook';
-    document.title = title;
-  }
 
   function renderRoute(opts) {
     opts = opts || {};
     var route = parseRoute();
     currentRoute = route;
-    if (!(route.name === 'review' && route.section === 'session')) reviewRevealed = false;
-    if (route.name === 'review' && route.section === 'session' && state.review.active && state.review.active.index >= state.review.active.queue.length) {
-      finalizeReviewSession();
-    }
+    review.sync(route);
     var html;
     if (route.name === 'home') html = viewHome();
     else if (route.name === 'learn') html = viewLearn();
-    else if (route.name === 'labs') html = viewLabs();
-    else if (route.name === 'commands') html = viewCommands();
-    else if (route.name === 'roadmap') html = viewRoadmap();
+    else if (route.name === 'labs') html = views.labs();
+    else if (route.name === 'commands') html = views.commands();
+    else if (route.name === 'roadmap') html = views.roadmap();
+    else if (route.name === 'cheatsheets') html = views.cheatsheets();
     else if (route.name === 'scenarios') html = viewScenarios(route.id);
-    else if (route.name === 'review') html = viewReview(route.section);
+    else if (route.name === 'review') html = review.view(route.section);
     else if (route.name === 'exam') html = viewExam(route.section);
     else if (route.name === 'mastery') html = viewMastery();
     else if (route.name === 'lesson') html = viewLesson(route.id, route.section);
@@ -2171,7 +1484,7 @@
     }
 
     closeNav();
-    closePalette();
+    palette.close();
 
     if (!opts.keepScroll) {
       if (route.name === 'lesson' && route.section) {
@@ -2305,7 +1618,7 @@
 
     var next = RHEL.getNextLesson(id);
     if (nowDone) {
-      showToast('<strong>Lesson complete.</strong> ' + (next ? 'Up next: <a href="#/lesson/' + next.id + '">' + esc(next.title) + '</a>' : 'Level 01 is finished. <a href="#/learn">Review the curriculum</a>.'));
+      showToast('<strong>Lesson complete.</strong> ' + (next ? 'Up next: <a href="#/lesson/' + next.id + '">' + esc(next.title) + '</a>' : 'You finished the live curriculum. <a href="#/learn">Review the path</a>.'));
       celebrateButton(id);
     } else {
       showToast('<strong>Marked incomplete.</strong> A useful excuse to run the lab again.');
@@ -2538,77 +1851,6 @@
     if (!scenario || !state.scenarioActive || state.scenarioActive.id !== id) return;
     if (scenarioGoalMet(scenario)) completeScenario(scenario);
     else showToast('<strong>Goal not met yet.</strong> Read the evidence and change one thing at a time.');
-  }
-
-  /* ------------------------------------------------------------------------
-     Review actions
-     ------------------------------------------------------------------------ */
-
-  function startReviewSession(filter) {
-    if (state.review.active && !window.confirm('A review session is already in progress. Start a new one and discard its position?')) return;
-    var cards = getReviewCards().filter(function (card) {
-      if (filter === 'quiz') return card.kind === 'quiz';
-      if (filter === 'commands') return card.kind === 'command';
-      return true;
-    });
-    var now = Date.now();
-    var due = cards.filter(function (card) { return RHEL.review.isDueToday(state.review.items[card.id], now); });
-    var pool = due.length ? due : cards;
-    var queue = shuffleList(pool).slice(0, 20).map(function (card) { return card.id; });
-    if (!queue.length) {
-      showToast('<strong>No cards available.</strong> Try a different review filter.');
-      return;
-    }
-    state.review.active = {
-      queue: queue,
-      index: 0,
-      filter: filter || 'all',
-      startedAt: now,
-      correct: 0,
-      again: 0
-    };
-    reviewRevealed = false;
-    saveState();
-    if (location.hash !== '#/review/session') location.hash = '#/review/session';
-    else renderRoute();
-  }
-
-  function finalizeReviewSession() {
-    var active = state.review.active;
-    if (!active) return;
-    var summary = {
-      completedAt: new Date().toISOString(),
-      reviewed: active.queue.length,
-      correct: active.correct,
-      again: active.again,
-      filter: active.filter,
-      durationSeconds: Math.max(0, Math.round((Date.now() - active.startedAt) / 1000))
-    };
-    state.review.lastSession = summary;
-    state.review.history = (state.review.history || []).concat(summary).slice(-20);
-    state.review.active = null;
-    reviewRevealed = false;
-    saveState();
-  }
-
-  function gradeReviewCard(correct) {
-    var active = state.review.active;
-    if (!active) return;
-    var card = reviewCardById(active.queue[active.index]);
-    if (!card) return;
-    RHEL.review.grade(state.review.items, card.id, correct, Date.now());
-    if (correct) active.correct += 1;
-    else active.again += 1;
-    active.index += 1;
-    if (active.index >= active.queue.length) finalizeReviewSession();
-    else saveState();
-    reviewRevealed = false;
-    renderRoute({ keepScroll: true });
-  }
-
-  function revealReviewCard() {
-    reviewRevealed = true;
-    renderRoute({ keepScroll: true });
   }
 
   /* ------------------------------------------------------------------------
@@ -3017,11 +2259,10 @@
         var parsed = JSON.parse(String(reader.result || ''));
         var imported = normalizeImportedProgress(parsed);
         if (!window.confirm('Replace your current progress with this import? This cannot be undone.')) return;
-        state = Object.assign({}, state, imported, { quizVersion: 3 });
+        replaceState(Object.assign({}, state, imported, { quizVersion: 3 }));
         saveState();
         commandCache = null;
-        reviewCardCache = null;
-        reviewRevealed = false;
+        review.invalidate();
         renderRoute();
         showToast('<strong>Progress imported.</strong> ' + imported.completedLessons.length + ' lessons, ' + imported.labsDone.length + ' labs, and review history restored.');
       } catch (err) {
@@ -3041,12 +2282,11 @@
   function resetProgress() {
     if (!window.confirm('Reset all lesson, scenario, review, and exam progress on this device? Sandbox files are separate and stay put. This cannot be undone.')) return;
     var theme = state.theme;
-    state = freshState();
+    replaceState(freshState());
     state.theme = theme;
     saveState();
     commandCache = null;
-    reviewCardCache = null;
-    reviewRevealed = false;
+    review.invalidate();
     renderRoute();
     showToast('<strong>Progress reset.</strong> A clean fieldbook. Start with Lesson 01.');
   }
@@ -3089,7 +2329,7 @@
       });
     }
     var searchBtn = document.getElementById('search-trigger');
-    if (searchBtn) searchBtn.addEventListener('click', openPalette);
+    if (searchBtn) searchBtn.addEventListener('click', palette.open);
     window.addEventListener('resize', function () {
       if (window.innerWidth > 760) closeNav();
     });
@@ -3100,193 +2340,6 @@
   function onScroll() {
     if (header) header.classList.toggle('is-scrolled', window.scrollY > 6);
     updateReadingProgress();
-  }
-
-  /* ------------------------------------------------------------------------
-     Command palette
-     ------------------------------------------------------------------------ */
-
-  var paletteActive = -1;
-  var paletteResults = [];
-  var paletteBuilt = false;
-  var paletteIndex = [];
-
-  function buildPaletteIndex() {
-    paletteIndex = [];
-    RHEL.lessonOrder.forEach(function (id) {
-      var l = RHEL.lessons[id];
-      paletteIndex.push({
-        type: 'Lesson',
-        icon: String(RHEL.getLessonNumber(id)).padStart(2, '0'),
-        title: l.title,
-        subtitle: l.subtitle,
-        url: '#/lesson/' + id,
-        haystack: [l.title, l.subtitle, l.difficulty, (l.tags || []).join(' '), l.objectives.join(' ')].join(' ').toLowerCase()
-      });
-    });
-    getCommands().forEach(function (c) {
-      paletteIndex.push({
-        type: 'Command',
-        icon: '>_',
-        title: c.cmd,
-        subtitle: c.desc + ' · ' + c.category,
-        url: '#/lesson/' + c.lesson,
-        haystack: [c.cmd, c.desc, c.category, c.lessonTitle].join(' ').toLowerCase(),
-        copy: c.cmd
-      });
-    });
-    RHEL.lessonOrder.forEach(function (id) {
-      var l = RHEL.lessons[id];
-      paletteIndex.push({
-        type: 'Lab',
-        icon: 'LAB',
-        title: l.lab.title,
-        subtitle: l.lab.scenario,
-        url: '#/lesson/' + id + '/lab',
-        haystack: [l.lab.title, l.lab.scenario, l.lab.steps.map(function (s) { return s.text; }).join(' ')].join(' ').toLowerCase()
-      });
-    });
-    RHEL.scenarios.forEach(function (scenario) {
-      paletteIndex.push({
-        type: 'Scenario',
-        icon: '2AM',
-        title: scenario.title,
-        subtitle: scenario.subtitle + ' · ' + Math.round(scenario.timeTarget / 60) + ' min target',
-        url: '#/scenarios/' + scenario.id,
-        haystack: [scenario.title, scenario.subtitle, scenario.story, 'broken systems incident scenario'].join(' ').toLowerCase()
-      });
-    });
-    paletteIndex.push({ type: 'Page', icon: 'GO', title: 'Curriculum', subtitle: 'Level 01 · sixteen lessons', url: '#/learn', haystack: 'curriculum lessons foundations level 01' });
-    paletteIndex.push({ type: 'Page', icon: 'GO', title: 'The full path', subtitle: 'Five levels, zero to production', url: '#/roadmap', haystack: 'roadmap path levels production rhcsa rhce rhca' });
-    paletteIndex.push({ type: 'Page', icon: 'GO', title: 'Labs', subtitle: 'Hands-on practice', url: '#/labs', haystack: 'labs practice exercises' });
-    paletteIndex.push({ type: 'Page', icon: 'GO', title: 'Command index', subtitle: 'Every command in Level 01', url: '#/commands', haystack: 'commands reference index' });
-    paletteIndex.push({ type: 'Page', icon: 'GO', title: 'Broken Systems', subtitle: 'Five live incidents in the sandbox', url: '#/scenarios', haystack: 'broken systems scenarios incidents troubleshooting 2am' });
-    paletteIndex.push({ type: 'Page', icon: 'REV', title: 'Spaced review', subtitle: 'Due quiz questions and command flashcards', url: '#/review', haystack: 'review spaced repetition leitner flashcards due today' });
-    paletteIndex.push({ type: 'Page', icon: 'EX', title: 'Level 01 final exam', subtitle: '30 timed questions and a practical task', url: '#/exam', haystack: 'exam final test certificate practical timed' });
-    paletteIndex.push({ type: 'Page', icon: 'MAP', title: 'Objective mastery', subtitle: '80 objectives with quiz and lab evidence', url: '#/mastery', haystack: 'mastery objectives evidence quiz lab progress' });
-    paletteBuilt = true;
-  }
-
-  function paletteScore(item, q) {
-    if (!q) return 0;
-    var title = item.title.toLowerCase();
-    if (title === q) return 100;
-    if (title.indexOf(q) === 0) return 80;
-    if (title.indexOf(q) !== -1) return 60;
-    if (item.haystack.indexOf(q) !== -1) return 30;
-    return -1;
-  }
-
-  function renderPalette(query) {
-    var q = (query || '').trim().toLowerCase();
-    var body = document.getElementById('palette-results');
-    if (!body) return;
-    if (!paletteBuilt) buildPaletteIndex();
-    var results;
-    if (!q) {
-      results = [
-        paletteIndex.find(function (i) { return i.url === '#/lesson/orientation'; }),
-        paletteIndex.find(function (i) { return i.url === '#/lesson/shell'; }),
-        paletteIndex.find(function (i) { return i.url === '#/lesson/help'; }),
-        paletteIndex.find(function (i) { return i.url === '#/learn'; }),
-        paletteIndex.find(function (i) { return i.url === '#/scenarios'; }),
-        paletteIndex.find(function (i) { return i.url === '#/review'; }),
-        paletteIndex.find(function (i) { return i.url === '#/exam'; }),
-        paletteIndex.find(function (i) { return i.url === '#/roadmap'; })
-      ].filter(Boolean);
-    } else {
-      results = paletteIndex.map(function (item) {
-        return { item: item, score: paletteScore(item, q) };
-      }).filter(function (x) { return x.score >= 0; })
-        .sort(function (a, b) { return b.score - a.score; })
-        .slice(0, 16)
-        .map(function (x) { return x.item; });
-    }
-    paletteResults = results;
-    paletteActive = results.length ? 0 : -1;
-
-    if (!results.length) {
-      body.innerHTML = '<div class="palette-empty">No matching lesson, lab, or command. Try “permissions” or “systemctl”.</div>';
-      return;
-    }
-    var html = '';
-    var lastType = '';
-    results.forEach(function (item, i) {
-      if (item.type !== lastType) {
-        html += '<div class="palette-section-title">' + esc(item.type) + '</div>';
-        lastType = item.type;
-      }
-      html += `<a class="palette-item ${i === 0 ? 'is-active' : ''}" href="${item.url}" data-palette-index="${i}">
-        <span class="palette-item-icon">${esc(item.icon)}</span>
-        <span class="palette-item-main"><strong>${esc(item.title)}</strong><span>${esc(item.subtitle)}</span></span>
-        ${icon('arrow', 12)}
-      </a>`;
-    });
-    body.innerHTML = html;
-  }
-
-  function openPalette() {
-    var overlay = document.getElementById('palette');
-    if (!overlay) return;
-    overlay.hidden = false;
-    document.body.classList.add('palette-open');
-    var input = document.getElementById('palette-input');
-    if (input) {
-      input.value = '';
-      window.setTimeout(function () { input.focus(); }, 30);
-    }
-    renderPalette('');
-  }
-
-  function closePalette() {
-    var overlay = document.getElementById('palette');
-    if (!overlay || overlay.hidden) return;
-    overlay.hidden = true;
-    document.body.classList.remove('palette-open');
-  }
-
-  function setupPalette() {
-    var overlay = document.getElementById('palette');
-    var input = document.getElementById('palette-input');
-    if (!overlay || !input) return;
-    overlay.addEventListener('click', function (e) {
-      if (e.target === overlay) closePalette();
-    });
-    input.addEventListener('input', function () { renderPalette(input.value); });
-    input.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (!paletteResults.length) return;
-        paletteActive = (paletteActive + (e.key === 'ArrowDown' ? 1 : -1) + paletteResults.length) % paletteResults.length;
-        document.querySelectorAll('.palette-item').forEach(function (el, i) {
-          el.classList.toggle('is-active', i === paletteActive);
-          if (i === paletteActive) el.scrollIntoView({ block: 'nearest' });
-        });
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (paletteActive >= 0 && paletteResults[paletteActive]) {
-          location.hash = paletteResults[paletteActive].url.replace(/^#/, '');
-        }
-      }
-    });
-    overlay.addEventListener('click', function (e) {
-      if (e.target.closest('.palette-item')) closePalette();
-    });
-    document.addEventListener('keydown', function (e) {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        if (overlay.hidden) openPalette(); else closePalette();
-      } else if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        var tag = (document.activeElement && document.activeElement.tagName) || '';
-        if (['INPUT', 'TEXTAREA', 'SELECT'].indexOf(tag) === -1 && !(document.activeElement && document.activeElement.isContentEditable) && overlay.hidden) {
-          e.preventDefault();
-          openPalette();
-        }
-      } else if (e.key === 'Escape') {
-        closePalette();
-        closeNav();
-      }
-    });
   }
 
   /* ------------------------------------------------------------------------
@@ -3381,19 +2434,19 @@
       var startReview = e.target.closest('[data-start-review]');
       if (startReview) {
         e.preventDefault();
-        startReviewSession(startReview.getAttribute('data-start-review'));
+        review.start(startReview.getAttribute('data-start-review'));
         return;
       }
       var reveal = e.target.closest('[data-review-reveal]');
       if (reveal) {
         e.preventDefault();
-        revealReviewCard();
+        review.reveal();
         return;
       }
       var grade = e.target.closest('[data-review-grade]');
       if (grade) {
         e.preventDefault();
-        gradeReviewCard(grade.getAttribute('data-review-grade') === 'good');
+        review.grade(grade.getAttribute('data-review-grade') === 'good');
         return;
       }
       var examStart = e.target.closest('[data-exam-start]');
@@ -3438,8 +2491,14 @@
         window.print();
         return;
       }
+      var printCheatsheets = e.target.closest('[data-print-cheatsheets]');
+      if (printCheatsheets) {
+        e.preventDefault();
+        window.print();
+        return;
+      }
       var paletteItem = e.target.closest('.palette-item');
-      if (paletteItem) closePalette();
+      if (paletteItem) palette.close();
     });
 
     document.addEventListener('change', function (e) {
@@ -3479,12 +2538,12 @@
       if (currentRoute.name !== 'review' || currentRoute.section !== 'session' || !state.review.active) return;
       var tag = (document.activeElement && document.activeElement.tagName) || '';
       if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].indexOf(tag) !== -1) return;
-      if (!reviewRevealed && (e.key === ' ' || e.key === 'Enter')) {
+      if (!review.revealed() && (e.key === ' ' || e.key === 'Enter')) {
         e.preventDefault();
-        revealReviewCard();
-      } else if (reviewRevealed && (e.key === '1' || e.key === '2')) {
+        review.reveal();
+      } else if (review.revealed() && (e.key === '1' || e.key === '2')) {
         e.preventDefault();
-        gradeReviewCard(e.key === '2');
+        review.grade(e.key === '2');
       }
     });
 
@@ -3500,12 +2559,28 @@
      Boot
      ------------------------------------------------------------------------ */
 
-  applyTheme(state.theme);
-  setupHeader();
-  setupPalette();
-  setupEvents();
-  startLiveClock();
-  history.scrollRestoration = 'manual';
-  renderRoute();
+  function boot() {
+    setReviewCardsProvider(review.getCards);
+    replaceState(loadPersistedState());
+    applyTheme(state.theme);
+    setupHeader();
+    palette.setup();
+    setupEvents();
+    startLiveClock();
+    history.scrollRestoration = 'manual';
+    renderRoute();
+  }
+
+  function showLoadError(error) {
+    console.error(error);
+    app.innerHTML = '<div class="view"><section class="page-hero"><div class="shell"><p class="eyebrow">Curriculum unavailable</p><h1>The fieldbook could not load.</h1><p class="lede">Lesson data is served from <code>assets/data/lessons/</code>. Run the site from a static HTTP server rather than opening the file directly, then reload.</p><p><button class="btn btn-primary" onclick="location.reload()">Try again</button></p></div></section></div>';
+  }
+
+  if (RHEL.contentLoaded) {
+    boot();
+  } else {
+    app.innerHTML = '<div class="view"><section class="page-hero"><div class="shell"><p class="eyebrow">Loading fieldbook</p><h1>Collecting the lessons<em>.</em></h1><p class="lede">Loading lesson metadata and reading bodies from the local curriculum data files.</p></div></section></div>';
+    RHEL.loadCurriculum().then(boot).catch(showLoadError);
+  }
 })();
 

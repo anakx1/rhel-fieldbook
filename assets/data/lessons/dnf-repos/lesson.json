@@ -1,0 +1,192 @@
+{
+  "id": "dnf-repos",
+  "module": "m08",
+  "title": "DNF repositories, modules, and history",
+  "subtitle": "Know exactly where packages come from, which stream is enabled, and how to reverse a transaction.",
+  "minutes": 36,
+  "difficulty": "Operator",
+  "tags": [
+    "dnf",
+    "repository",
+    "module",
+    "stream",
+    "rpm",
+    "history"
+  ],
+  "objectives": [
+    "Inspect enabled repositories and package provenance",
+    "Write a repository definition with a working baseurl",
+    "Explain module streams and the RHEL 9 versus RHEL 10 difference",
+    "Use DNF history to review and undo a transaction",
+    "Verify package ownership and file integrity"
+  ],
+  "ex200": [
+    {
+      "objective": 0,
+      "exam": "deploy",
+      "evidence": "dnf repolist and dnf info output."
+    },
+    {
+      "objective": 1,
+      "exam": "deploy",
+      "evidence": "A .repo file under /etc/yum.repos.d with gpgcheck."
+    },
+    {
+      "objective": 2,
+      "exam": "deploy",
+      "evidence": "dnf module list/enable and version-specific explanation."
+    },
+    {
+      "objective": 3,
+      "exam": "deploy",
+      "evidence": "dnf history and undo plan."
+    },
+    {
+      "objective": 4,
+      "exam": "tools",
+      "evidence": "rpm -qf and rpm -V."
+    }
+  ],
+  "versionNotes": [
+    "RHEL 9 uses DNF 4. RHEL 10 ships DNF5: familiar verbs remain, but output, configuration commands, and some module workflows differ.",
+    "DNF5 on RHEL 10 handles modularity differently and does not expose every DNF 4 module subcommand. Pin versions through repositories or AppStream content and test the exact release."
+  ],
+  "sections": [
+    {
+      "title": "Repositories are policy",
+      "file": "01.html"
+    },
+    {
+      "title": "Modules, streams, and DNF5",
+      "file": "02.html"
+    },
+    {
+      "title": "History, ownership, and verification",
+      "file": "03.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "dnf repolist -v",
+      "desc": "Show enabled repositories and their base URLs.",
+      "category": "DNF"
+    },
+    {
+      "cmd": "dnf repoquery --info nginx",
+      "desc": "Query package metadata from repositories.",
+      "category": "DNF"
+    },
+    {
+      "cmd": "sudo dnf config-manager --add-repo URL",
+      "desc": "Add a repository definition (DNF 4 syntax).",
+      "category": "DNF"
+    },
+    {
+      "cmd": "dnf module list php",
+      "desc": "List module streams on a RHEL 9 system.",
+      "category": "DNF"
+    },
+    {
+      "cmd": "sudo dnf module enable php:8.2",
+      "desc": "Enable a module stream before installing.",
+      "category": "DNF"
+    },
+    {
+      "cmd": "sudo dnf install -y nginx",
+      "desc": "Install a package non-interactively.",
+      "category": "DNF"
+    },
+    {
+      "cmd": "sudo dnf history list",
+      "desc": "List transactions with IDs and actions.",
+      "category": "DNF"
+    },
+    {
+      "cmd": "sudo dnf history undo ID",
+      "desc": "Reverse a transaction by ID.",
+      "category": "DNF"
+    },
+    {
+      "cmd": "rpm -qf /usr/bin/nginx",
+      "desc": "Find the package that owns a file.",
+      "category": "RPM"
+    },
+    {
+      "cmd": "rpm -V openssh-server",
+      "desc": "Verify installed files against package metadata.",
+      "category": "RPM"
+    }
+  ],
+  "lab": {
+    "title": "Add a repository, choose a stream, install, inspect",
+    "scenario": "Create a local repository definition, refresh metadata, inspect a module stream, install nginx, and review the transaction history.",
+    "minutes": 24,
+    "steps": [
+      {
+        "text": "Inspect enabled repositories and confirm package provenance.",
+        "cmd": "dnf repolist && dnf info nginx",
+        "verify": "Repository IDs are visible and nginx resolves to a repository.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Create a repository file with a baseurl, enabled flag, and GPG checking.",
+        "cmd": "printf \"[fieldbook]\\nname=Fieldbook local packages\\nbaseurl=https://repo.example.com/rhel/9/\\$basearch/\\nenabled=1\\ngpgcheck=1\\n\" | sudo tee /etc/yum.repos.d/fieldbook.repo",
+        "verify": "The .repo file contains section name, baseurl, enabled=1, and gpgcheck=1.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Refresh metadata so DNF reads the new repository.",
+        "cmd": "sudo dnf makecache",
+        "verify": "Metadata cache is created without an error from the new repo.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Inspect the PHP module stream and enable the 8.2 stream.",
+        "cmd": "dnf module list php && sudo dnf module enable php:8.2",
+        "verify": "The enabled stream is recorded and the next install would use it.",
+        "check": "sandbox"
+      },
+      {
+        "text": "Install nginx, then review history and package ownership.",
+        "cmd": "sudo dnf install -y nginx && sudo dnf history && rpm -qf /usr/sbin/nginx",
+        "verify": "nginx is installed, history shows the transaction, and rpm -qf identifies the owner.",
+        "check": "sandbox"
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "Where do local DNF repository definitions normally live?",
+      "options": [
+        "/etc/yum.repos.d/",
+        "/var/lib/dnf/repos/",
+        "/etc/dnf.conf.d/",
+        "/usr/share/dnf/"
+      ],
+      "answer": 0,
+      "why": "DNF reads .repo files from /etc/yum.repos.d; /etc/dnf/dnf.conf supplies global settings."
+    },
+    {
+      "q": "What is a module stream?",
+      "options": [
+        "A firewall zone",
+        "A named version track for a package set",
+        "A systemd target",
+        "A filesystem label"
+      ],
+      "answer": 1,
+      "why": "A stream selects a version track for modular content, such as php:8.2 versus php:8.0."
+    },
+    {
+      "q": "Which command reverses an earlier DNF transaction?",
+      "options": [
+        "dnf rollback now",
+        "dnf history undo ID",
+        "rpm -e --all",
+        "dnf clean all"
+      ],
+      "answer": 1,
+      "why": "dnf history undo uses the transaction ID and plans the reverse operations."
+    }
+  ]
+}

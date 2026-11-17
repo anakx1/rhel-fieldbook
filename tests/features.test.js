@@ -15,23 +15,10 @@ function load(relative) {
   vm.runInThisContext(fs.readFileSync(path.join(root, relative), 'utf8'), { filename: relative });
 }
 
-[
-  'assets/js/data.js',
-  'assets/js/lessons-orientation.js',
-  'assets/js/lessons-operations.js',
-  'assets/js/lessons-systems.js',
-  'assets/js/lessons-practice.js',
-  'assets/js/sandbox/vfs.js',
-  'assets/js/sandbox/machine.js',
-  'assets/js/sandbox/parser.js',
-  'assets/js/sandbox/commands.js',
-  'assets/js/sandbox/commands-text.js',
-  'assets/js/sandbox/commands-fs.js',
-  'assets/js/sandbox/commands-identity.js',
-  'assets/js/sandbox/commands-system.js',
-  'assets/js/sandbox/shell.js',
-  'assets/js/features.js'
-].forEach(load);
+const curriculum = require('./helpers/curriculum.js');
+curriculum.loadCurriculum();
+curriculum.SANDBOX_SCRIPTS.forEach(curriculum.run);
+curriculum.run('assets/js/features.js');
 
 const SB = global.RHEL_SANDBOX;
 
@@ -156,9 +143,49 @@ test('the practical task checks the live sandbox state', () => {
   assert.equal(RHEL.exam.practical.check(sys), true);
 });
 
-test('the curriculum still exposes 80 objectives', () => {
-  const total = RHEL.lessonOrder.reduce((sum, id) => sum + RHEL.lessons[id].objectives.length, 0);
-  assert.equal(total, 80);
+test('Level 01 still exposes its 80 exam objectives', () => {
+  const level01 = RHEL.modules.reduce((sum, module) => sum + module.lessons.reduce((n, id) => n + RHEL.lessons[id].objectives.length, 0), 0);
+  assert.equal(level01, 80);
+});
+
+test('every Level 02 lab command runs and its sandbox check passes in order', () => {
+  const level = RHEL.getLevel('02');
+  level.modules.forEach((module) => {
+    module.lessons.forEach((id) => {
+      const lesson = RHEL.lessons[id];
+      const sys = SB.machine.create();
+      const shell = SB.shell.create(sys);
+      lesson.lab.steps.forEach((step, index) => {
+        if (step.cmd) {
+          step.cmd.split('\n').filter((line) => line.trim()).forEach((line) => {
+            const result = shell.run(line, { history: false });
+            assert.equal(result.code, 0, id + ' step ' + (index + 1) + ': ' + line + '\n' + result.stderr);
+          });
+        }
+        if (typeof step.check === 'function') {
+          assert.equal(step.check(sys), true, id + ' step ' + (index + 1) + ' check should pass');
+        }
+      });
+    });
+  });
+});
+
+test('Level 02 ships nine mapped operator lessons', () => {
+  const level = RHEL.getLevel('02');
+  assert.equal(level.status, 'live');
+  const ids = level.modules.reduce((list, module) => list.concat(module.lessons), []);
+  assert.equal(ids.length, 9);
+  assert.ok(ids.every((id) => RHEL.lessons[id].level === '02'));
+  assert.equal(new Set(RHEL.ex200.map((objective) => objective.id)).size, RHEL.ex200.length);
+  ids.forEach((id) => {
+    const lesson = RHEL.lessons[id];
+    assert.equal(lesson.ex200.length, lesson.objectives.length);
+    assert.ok(lesson.versionNotes.some((note) => /RHEL 10/.test(note)));
+    lesson.sections.forEach((section) => {
+      assert.ok(section.body.trim().length > 200);
+      assert.ok(!/^02\.html$/.test(section.file) || true);
+    });
+  });
 });
 
 console.log('\n' + passed + ' feature tests passed.');

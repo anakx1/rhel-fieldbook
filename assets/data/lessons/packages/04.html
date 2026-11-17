@@ -1,0 +1,11 @@
+<p>Some software is best installed as a group of packages. RHEL provides package groups for common roles:</p>
+        <div class="code-label"><span>terminal · package groups</span></div>
+        <pre><code>dnf group list
+sudo dnf group install "Development Tools"
+dnf group info "Development Tools"</code></pre>
+        <p>RHEL 9 also exposes <strong>module streams</strong> for selected application versions, such as alternative language runtimes. Check what is available before assuming a version:</p>
+        <div class="code-label"><span>terminal · module streams</span></div>
+        <pre><code>dnf module list
+dnf module info nodejs</code></pre>
+        <p>Streams are being reworked in RHEL 10 as application streams and newer DNF behavior. Treat version-specific module commands as something to verify on the system in front of you, not something to paste blindly from an old blog post.</p>
+        <p>Finally, verify the baseline. <code>rpm -Va</code> checks every installed package and can take time; it is a useful audit step on a quiet system. <code>dnf check-update</code> tells you what is pending. <code>dnf history</code> tells you what happened.</p>

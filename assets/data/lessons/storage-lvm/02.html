@@ -1,0 +1,12 @@
+<p>Create the stack in order. Every command should be followed by an inspection command, because LVM is stateful and a typo can attach the wrong device.</p>
+<div class="code-label"><span>terminal · create PV, VG, LV</span></div>
+<pre><code>sudo pvcreate /dev/sdb
+sudo vgcreate vgdata /dev/sdb
+sudo lvcreate -n lvapp -L 5G vgdata
+sudo lvs
+sudo mkfs.xfs /dev/vgdata/lvapp
+sudo mkdir -p /app
+sudo mount /dev/vgdata/lvapp /app
+findmnt /app</code></pre>
+<p>The device path <code>/dev/vgdata/lvapp</code> is a convenient symlink to the actual device-mapper node under <code>/dev/mapper</code>. For fstab, a UUID is still the most stable identifier. Use <code>blkid /dev/vgdata/lvapp</code> to read it.</p>
+<div class="callout warn"><div class="callout-title">Never pvcreate a disk you need</div><p><code>pvcreate</code> writes LVM metadata. Confirm the device with <code>lsblk</code> first and remember that a cloud volume can be attached with a different name on another host.</p></div>

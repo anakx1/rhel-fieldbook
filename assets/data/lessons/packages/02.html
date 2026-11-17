@@ -1,0 +1,15 @@
+<p>Good package hygiene starts with a query. Find the exact name, confirm the source repository, and read what the package provides before changing the system.</p>
+        <div class="code-label"><span>terminal · package reconnaissance</span></div>
+        <pre><code>dnf search httpd
+dnf info httpd
+dnf provides /usr/sbin/httpd
+dnf repoquery -l httpd</code></pre>
+        <p><code>dnf info</code> shows version, release, architecture, repository, size, license, and a summary. The repository name is important: a package from an untrusted third-party repo is a different risk decision from one in the base RHEL repositories.</p>
+        <p>For installed packages, RPM answers precise questions:</p>
+        <div class="code-label"><span>terminal · installed package queries</span></div>
+        <pre><code>rpm -qa | grep httpd
+rpm -qi httpd
+rpm -ql httpd | head
+rpm -qf /etc/httpd/conf/httpd.conf
+rpm -V httpd</code></pre>
+        <p><code>rpm -V</code> verifies file metadata against the package database. It can reveal modified permissions, missing files, or changed checksums. Configuration files often show as modified — that is expected. Unexplained changes in binaries are not.</p>

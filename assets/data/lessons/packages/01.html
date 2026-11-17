@@ -1,0 +1,20 @@
+<p><strong>RPM</strong> is the package format and the low-level database. <strong>DNF</strong> is the dependency resolver and repository client that drives RPM. Think of RPM as the container and DNF as the logistics system.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Task</th><th>Tool</th><th>Example</th></tr></thead>
+            <tbody>
+              <tr><td>Install from a repository</td><td>dnf</td><td><code>dnf install httpd</code></td></tr>
+              <tr><td>Search available packages</td><td>dnf</td><td><code>dnf search web server</code></td></tr>
+              <tr><td>Show package details</td><td>dnf</td><td><code>dnf info httpd</code></td></tr>
+              <tr><td>List installed packages</td><td>rpm</td><td><code>rpm -qa</code></td></tr>
+              <tr><td>Find the owner of a file</td><td>rpm</td><td><code>rpm -qf /usr/sbin/httpd</code></td></tr>
+              <tr><td>List files in a package</td><td>rpm / dnf</td><td><code>rpm -ql httpd</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Packages are cryptographically signed. DNF verifies repository metadata and package signatures by default; do not disable GPG checking to make an error disappear. If a third-party repository has a bad key, fix the trust relationship or do not use the repository.</p>
+        <p>On a subscribed RHEL system, <code>subscription-manager</code> attaches entitlements and configures the appropriate repositories. Cloud and developer images may already be registered. Verify with:</p>
+        <div class="code-label"><span>terminal · repository state</span></div>
+        <pre><code>sudo subscription-manager status
+dnf repolist
+ls /etc/yum.repos.d/</code></pre>

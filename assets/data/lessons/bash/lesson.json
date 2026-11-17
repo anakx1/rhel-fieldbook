@@ -1,0 +1,157 @@
+{
+  "id": "bash",
+  "module": "m04",
+  "title": "Your first real script",
+  "subtitle": "Turn a sequence of commands into a safe, readable tool that fails loudly.",
+  "minutes": 32,
+  "difficulty": "Core",
+  "tags": [
+    "bash",
+    "scripting",
+    "automation",
+    "exit codes"
+  ],
+  "objectives": [
+    "Write a Bash script with a shebang and strict mode",
+    "Use variables, quoting, arguments, and command substitution",
+    "Make decisions with test expressions and loops",
+    "Handle errors instead of hiding them",
+    "Build and run a small system health report"
+  ],
+  "sections": [
+    {
+      "title": "Anatomy of a script",
+      "file": "01.html"
+    },
+    {
+      "title": "Variables, arguments, quoting",
+      "file": "02.html"
+    },
+    {
+      "title": "Decisions and loops",
+      "file": "03.html"
+    },
+    {
+      "title": "A health report you would actually keep",
+      "file": "04.html"
+    }
+  ],
+  "commands": [
+    {
+      "cmd": "#!/bin/bash",
+      "desc": "Shebang: select Bash as the interpreter.",
+      "category": "Bash"
+    },
+    {
+      "cmd": "set -euo pipefail",
+      "desc": "Fail fast on errors, unset variables, and pipeline failures.",
+      "category": "Bash"
+    },
+    {
+      "cmd": "chmod +x script.sh",
+      "desc": "Make a script executable.",
+      "category": "Bash"
+    },
+    {
+      "cmd": "./script.sh",
+      "desc": "Run a script from the current directory.",
+      "category": "Bash"
+    },
+    {
+      "cmd": "echo $HOME",
+      "desc": "Expand a variable in the shell.",
+      "category": "Bash"
+    },
+    {
+      "cmd": "name=$(command)",
+      "desc": "Capture command output in a variable.",
+      "category": "Bash"
+    },
+    {
+      "cmd": "[[ -f \"$file\" ]]",
+      "desc": "Test whether a path is a regular file.",
+      "category": "Bash"
+    },
+    {
+      "cmd": "for item in \"$@\"; do ...; done",
+      "desc": "Loop over arguments safely.",
+      "category": "Bash"
+    },
+    {
+      "cmd": "if systemctl is-active --quiet sshd; then ...; fi",
+      "desc": "Branch on a command exit status.",
+      "category": "Bash"
+    },
+    {
+      "cmd": "exit 1",
+      "desc": "Return a non-zero status to signal failure.",
+      "category": "Bash"
+    }
+  ],
+  "lab": {
+    "title": "Write a health report",
+    "scenario": "Create a reusable script that another admin could run without reading the source first.",
+    "minutes": 22,
+    "steps": [
+      {
+        "text": "Create the script with a shebang and strict mode.",
+        "cmd": "mkdir -p ~/bin && $EDITOR ~/bin/healthcheck.sh",
+        "verify": "The script should exist at ~/bin/healthcheck.sh and start with #!/bin/bash and set -euo pipefail."
+      },
+      {
+        "text": "Add host, date, kernel, disk, failed-unit, and recent-error sections. Redirect the block to a timestamped file.",
+        "verify": "Use the complete example above. Quote every variable expansion."
+      },
+      {
+        "text": "Make it executable and run it.",
+        "cmd": "chmod +x ~/bin/healthcheck.sh && ~/bin/healthcheck.sh",
+        "verify": "The script should run without errors and print the report path or a summary."
+      },
+      {
+        "text": "Verify the report exists and has content.",
+        "cmd": "ls -lh ~/health && head -n 20 ~/health/health-*.txt",
+        "verify": "The report file should exist under ~/health and include host, date, and disk sections."
+      },
+      {
+        "text": "Break it on purpose: run it with an unwritable report directory and observe the non-zero exit.",
+        "cmd": "~/bin/healthcheck.sh /root/not-allowed; echo \"exit: $?\"",
+        "verify": "The exit status should be non-zero, and the error should be visible."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "q": "What does set -u do?",
+      "options": [
+        "Enables verbose output",
+        "Treats undefined variables as errors",
+        "Unmounts filesystems",
+        "Disables pipes"
+      ],
+      "answer": 1,
+      "why": "set -u makes an unset variable an error, preventing empty expansions from silently changing a command."
+    },
+    {
+      "q": "Why quote \"$@\" instead of using $@?",
+      "options": [
+        "It preserves each argument as a separate word",
+        "It sorts the arguments",
+        "It removes duplicate arguments",
+        "It converts arguments to uppercase"
+      ],
+      "answer": 0,
+      "why": "Quoted \"$@\" preserves word boundaries, which matters for arguments containing spaces or glob characters."
+    },
+    {
+      "q": "A script prints an error but exits 0. Why is that a problem?",
+      "options": [
+        "It uses too much CPU",
+        "Automation will treat the run as successful",
+        "It disables the journal",
+        "Bash cannot print errors"
+      ],
+      "answer": 1,
+      "why": "Exit status is how callers detect failure. Printing an error without a non-zero exit hides the failure from automation."
+    }
+  ]
+}

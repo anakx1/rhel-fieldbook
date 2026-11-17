@@ -1,0 +1,21 @@
+<p>A script is a text file that the shell executes. The first line, the <strong>shebang</strong>, names the interpreter. On RHEL, use the Bash that is actually installed:</p>
+        <div class="code-label"><span>healthcheck.sh</span></div>
+        <pre><code>#!/bin/bash
+set -euo pipefail
+
+echo "host: $(hostname)"
+echo "date: $(date -Iseconds)"
+echo "user: $(whoami)"</code></pre>
+        <p>Make it executable and run it:</p>
+        <div class="code-label"><span>terminal · run a script</span></div>
+        <pre><code>chmod +x healthcheck.sh
+./healthcheck.sh
+bash healthcheck.sh</code></pre>
+        <p><code>./</code> means "this directory." The current directory is not on <code>PATH</code> by default, which is a safety feature: a malicious file named <code>ls</code> in your working directory should not run just because you typed <code>ls</code>.</p>
+        <p><code>set -euo pipefail</code> is the closest thing Bash has to a safety belt:</p>
+        <ul>
+          <li><code>-e</code> — exit on an unhandled command failure.</li>
+          <li><code>-u</code> — error on an undefined variable.</li>
+          <li><code>-o pipefail</code> — a pipeline fails if any stage fails, not just the last one.</li>
+        </ul>
+        <p>It is not a substitute for thinking. Commands in conditions, pipelines, and subshells have edge cases. But it turns silent corruption into a visible failure.</p>

@@ -1,0 +1,11 @@
+<p><strong>Swap</strong> gives the kernel a place to move anonymous memory pages when pressure rises. It is not a substitute for enough RAM, but it is a safety margin and a prerequisite for hibernation on systems that support it.</p>
+<div class="code-label"><span>terminal · activate swap</span></div>
+<pre><code>sudo mkswap /dev/sdc
+sudo swapon /dev/sdc
+swapon --show
+free -h</code></pre>
+<p>To persist a swap partition, add an fstab entry with <code>swap</code> as the type and <code>sw</code> as the options. A swap <em>file</em> is also valid, but it must live on a filesystem that supports it and must not be sparse. On RHEL, XFS supports swap files; create the file with <code>dd</code> or <code>fallocate</code>, <code>chmod 600</code>, <code>mkswap</code>, then <code>swapon</code>.</p>
+<div class="code-label"><span>/etc/fstab · swap</span></div>
+<pre><code>UUID=...  none  swap  defaults  0 0</code></pre>
+<p>RHEL 9 and RHEL 10 both use the same fstab and swap model. XFS still cannot shrink, so capacity planning is one-way. RHEL 10's newer storage stack does not change that constraint; it only gives you better tooling around it.</p>
+<div class="callout note"><div class="callout-title">RHEL 9 vs RHEL 10</div><p>Commands in this lesson work on both releases. Always check <code>lsblk</code> and the current documentation for device naming, because cloud and virtual hardware can present NVMe or multipath names instead of <code>sdb</code>.</p></div>

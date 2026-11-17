@@ -356,14 +356,28 @@
   });
 
   reg('visudo', function (ctx, args) {
-    if (args.indexOf('-c') === -1) {
-      return C.fail('visudo: this sandbox does not open an editor; use visudo -c to validate.\n', 1);
+    var targetFile = null;
+    for (var i = 0; i < args.length; i++) {
+      if ((args[i] === '-f' || args[i] === '--file') && args[i + 1]) { targetFile = args[++i]; continue; }
+      if (/^-f./.test(args[i])) { targetFile = args[i].slice(2); continue; }
+      if (/^-c.?f/.test(args[i])) {
+        if (args[i].length > 3) targetFile = args[i].slice(3);
+        else if (args[i + 1]) targetFile = args[++i];
+      }
+    }
+    if (args.indexOf('-c') === -1 && args.indexOf('-cf') === -1 && !args.some(function (arg) { return /^-c.?f/.test(arg); })) {
+      return C.fail('visudo: this sandbox does not open an editor; use visudo -c or visudo -cf FILE to validate.\n', 1);
     }
     var bad = [];
-    var files = ['/etc/sudoers'].concat(Object.keys(ctx.sys.fs).filter(function (path) { return path.indexOf('/etc/sudoers.d/') === 0; }));
-    files.forEach(function (path) {
+    var files = targetFile ? [targetFile] : ['/etc/sudoers'].concat(Object.keys(ctx.sys.fs).filter(function (path) { return path.indexOf('/etc/sudoers.d/') === 0; }));
+    files.forEach(function (rawPath) {
+      var resolved = VFS.resolve(ctx.sys, rawPath, ctx.sys.cwd, ctx.user, false);
+      var path = resolved.error ? rawPath : resolved.path;
       var node = ctx.sys.fs[path];
-      if (!node || node.type !== 'file') return;
+      if (!node || node.type !== 'file') {
+        bad.push(path + ': No such file or directory');
+        return;
+      }
       C.splitLines(node.content).forEach(function (line, index) {
         if (!line.trim() || line.trim().charAt(0) === '#') return;
         if (!/^(%?[A-Za-z0-9_.-]+|Defaults|User_Alias|Runas_Alias|Host_Alias|Cmnd_Alias)\b/.test(line.trim())) {
@@ -371,8 +385,10 @@
         }
       });
     });
+    ctx.sys.evidence = ctx.sys.evidence || {};
+    ctx.sys.evidence['sudo:validated'] = true;
     if (bad.length) return C.both(bad.join('\n') + '\n', '', 1);
-    return C.ok('/etc/sudoers: parsed OK\n' + Object.keys(ctx.sys.fs).filter(function (path) { return path.indexOf('/etc/sudoers.d/') === 0; }).map(function (path) { return path + ': parsed OK'; }).join('\n') + '\n');
+    return C.ok(files.map(function (path) { return path + ': parsed OK'; }).join('\n') + '\n');
   });
 
   reg('id', function (ctx, args) {
@@ -438,6 +454,11 @@
     if (database === 'hosts') {
       var hosts = C.splitLines(sys.fs['/etc/hosts'].content);
       var matches = hosts.filter(function (line) { return !key || line.indexOf(key) !== -1; });
+      if (key) {
+        sys.evidence = sys.evidence || {};
+        if (/^[0-9.]+$/.test(key)) sys.evidence['network:resolve-ip'] = true;
+        else sys.evidence['network:resolve'] = true;
+      }
       return C.ok(matches.join('\n') + (matches.length ? '\n' : ''), matches.length ? 0 : 2);
     }
     return C.fail('getent: Unknown database: ' + database, 2);
@@ -447,6 +468,7 @@
     var target = 'root';
     var runLogin = false;
     var list = false;
+    var listUser = null;
     var command = [];
     var i = 0;
     while (i < args.length) {
@@ -456,6 +478,8 @@
       if (/^-u./.test(arg)) { target = arg.slice(2); i += 1; continue; }
       if (arg === '-i' || arg === '--login') { runLogin = true; i += 1; continue; }
       if (arg === '-l' || arg === '--list') { list = true; i += 1; continue; }
+      if (arg === '-U' && args[i + 1]) { listUser = args[i + 1]; i += 2; continue; }
+      if (/^-U./.test(arg)) { listUser = arg.slice(2); i += 1; continue; }
       if (arg === '-s' || arg === '-E' || arg === '-H' || arg === '-n') { i += 1; continue; }
       if (arg.charAt(0) === '-') { i += 1; continue; }
       break;
@@ -467,7 +491,16 @@
       return C.fail(ctx.userName + ' is not in the sudoers file. This incident will be reported.', 1);
     }
     if (list) {
-      return C.ok('Matching Defaults entries for ' + ctx.userName + ' on ' + ctx.sys.hostname + ':\n    !visiblepw, always_set_home, match_group_by_gid, always_query_group_plugin\n\nUser ' + ctx.userName + ' may run the following commands on ' + ctx.sys.hostname + ':\n    (ALL) ALL\n');
+      ctx.sys.evidence = ctx.sys.evidence || {};
+      ctx.sys.evidence['sudo:list'] = true;
+      var who = listUser || ctx.userName;
+      var scoped = [];
+      Object.keys(ctx.sys.fs).filter(function (path) { return /^\/etc\/sudoers\.d\//.test(path); }).forEach(function (path) {
+        C.splitLines(ctx.sys.fs[path].content || '').forEach(function (line) {
+          if (/^%webops\s+ALL=\(ALL\)\s+\/usr\/bin\/systemctl restart httpd/.test(line.trim())) scoped.push('    (ALL) /usr/bin/systemctl restart httpd');
+        });
+      });
+      return C.ok('Matching Defaults entries for ' + who + ' on ' + ctx.sys.hostname + ':\n    !visiblepw, always_set_home, match_group_by_gid, always_query_group_plugin\n\nUser ' + who + ' may run the following commands on ' + ctx.sys.hostname + ':\n' + (scoped.length ? scoped.join('\n') + '\n' : '    (ALL) ALL\n'));
     }
     if (runLogin) {
       if (!ctx.shell || !ctx.shell.switchUser) return C.fail('sudo: shell integration unavailable', 1);

@@ -1,0 +1,20 @@
+<p>Wildcards expand in the shell before the command runs. They match filenames in the current directory, not file contents.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Pattern</th><th>Matches</th></tr></thead>
+            <tbody>
+              <tr><td><code>*</code></td><td>Any number of characters, including none.</td></tr>
+              <tr><td><code>?</code></td><td>Exactly one character.</td></tr>
+              <tr><td><code>[abc]</code></td><td>One character from the set.</td></tr>
+              <tr><td><code>[0-9]</code></td><td>One digit.</td></tr>
+              <tr><td><code>{notes,logs}</code></td><td>Brace expansion produces two separate arguments.</td></tr>
+              <tr><td><code>file{1..5}.txt</code></td><td>file1.txt through file5.txt.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Brace expansion happens before globbing and works even when files do not exist yet:</p>
+        <div class="code-label"><span>terminal · dry-run expansion</span></div>
+        <pre><code>echo ~/lab/{notes,logs}
+touch ~/lab/notes/day{1..3}.txt
+ls ~/lab/notes</code></pre>
+        <p>Use <code>echo</code> first when you are unsure. It shows what the shell would expand without running the real command. Hidden files require an explicit dot: <code>*</code> does not match <code>.bashrc</code>, while <code>.*</code> does — and it also matches <code>.</code> and <code>..</code>, which is why recursive deletions with <code>.*</code> are dangerous.</p>

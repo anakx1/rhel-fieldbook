@@ -1,0 +1,10 @@
+<p>DNF history is an operational audit trail. It records what changed, when, by whom, and with which package set. Before undoing, inspect the transaction rather than assuming the reverse is harmless.</p>
+<div class="code-label"><span>terminal · review and verify</span></div>
+<pre><code>sudo dnf history
+sudo dnf history info 7
+sudo dnf history undo 7
+rpm -qf /usr/sbin/nginx
+rpm -V nginx
+dnf provides /usr/sbin/nginx</code></pre>
+<p><code>rpm -V</code> compares installed file metadata against the package database. A changed configuration file can be intentional; a changed binary is a reason to investigate. Package verification is evidence, not a substitute for configuration management.</p>
+<div class="callout note"><div class="callout-title">RHEL 9 vs RHEL 10</div><p>Plan upgrades around DNF5 output changes. Scripts that parse human-readable DNF 4 output may break on RHEL 10; prefer stable query formats where available and test automation against both versions.</p></div>

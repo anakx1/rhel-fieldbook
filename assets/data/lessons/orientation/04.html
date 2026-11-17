@@ -1,0 +1,12 @@
+<p>You need a disposable RHEL-family system. <strong>Never practice destructive commands on a production host.</strong> A lab is not a luxury; it is part of the method.</p>
+        <ul>
+          <li><strong>Red Hat Developer subscription</strong> — the official low-cost route for individuals. It provides RHEL entitlements and is ideal if you want the real product.</li>
+          <li><strong>Cloud instance</strong> — fast to create and easy to destroy. Use a private security group and stop the instance when you are done.</li>
+          <li><strong>Local virtual machine</strong> — KVM, VirtualBox, or another hypervisor. Take a snapshot before every lab. Snapshots are your undo button.</li>
+          <li><strong>RHEL-compatible rebuild</strong> — Rocky Linux or AlmaLinux when you want a no-cost practice environment. The administration model is nearly identical, but verify vendor-specific tasks against RHEL documentation.</li>
+        </ul>
+        <p>Minimum comfortable lab: 2 vCPUs, 2–4 GB RAM, 20 GB disk, one network interface, and a snapshot called <code>clean-install</code>. If you are on a laptop, that is enough. You do not need a data center to learn the fundamentals.</p>
+        <div class="callout warn">
+          <div class="callout-title">Snapshot before you sudo</div>
+          <p>Networking, boot, storage, and SELinux labs can make a machine unreachable. A snapshot turns a failed experiment into a two-minute reset instead of a rebuild.</p>
+        </div>

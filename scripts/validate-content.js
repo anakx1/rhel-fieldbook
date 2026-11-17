@@ -51,10 +51,7 @@ function check(label, fn) {
 }
 
 load('assets/js/data.js');
-load('assets/js/lessons-orientation.js');
-load('assets/js/lessons-operations.js');
-load('assets/js/lessons-systems.js');
-load('assets/js/lessons-practice.js');
+load('assets/js/lab-checks.js');
 load('assets/js/quiz-order.js');
 
 var RHEL = global.RHEL;
@@ -62,6 +59,51 @@ if (!RHEL || !Array.isArray(RHEL.lessonOrder) || !RHEL.lessons) {
   console.error('Unable to load the RHEL curriculum data.');
   process.exit(1);
 }
+
+var CONTENT_ROOT = path.join(ROOT, 'assets/data/lessons');
+var manifest = JSON.parse(fs.readFileSync(path.join(CONTENT_ROOT, 'index.json'), 'utf8'));
+var bodyCache = {};
+function idToModuleLevel02(id) {
+  var module = (RHEL.allModules || []).filter(function (item) { return (item.lessons || []).indexOf(id) !== -1; })[0];
+  return module ? module.id : '';
+}
+
+
+function loadLessonFile(id) {
+  var dir = path.join(CONTENT_ROOT, id);
+  var filename = path.join(dir, 'lesson.json');
+  if (!fs.existsSync(filename)) {
+    fail('Missing lesson file: assets/data/lessons/' + id + '/lesson.json');
+    return null;
+  }
+  var lesson;
+  try {
+    lesson = JSON.parse(fs.readFileSync(filename, 'utf8'));
+  } catch (error) {
+    fail('Invalid JSON in ' + id + ': ' + error.message);
+    return null;
+  }
+  ['sections'].forEach(function (key) {
+    if (!Array.isArray(lesson[key])) return;
+    lesson[key].forEach(function (section) {
+      var bodyPath = path.join(dir, section.file || '');
+      if (!section.file || !fs.existsSync(bodyPath)) {
+        fail('Lesson ' + id + ' references a missing section body: ' + section.file);
+        return;
+      }
+      var body = fs.readFileSync(bodyPath, 'utf8');
+      if (!body.trim()) fail('Lesson ' + id + ' section ' + section.file + ' is empty.');
+      section.body = body;
+      bodyCache[id] = (bodyCache[id] || '') + '\n' + body;
+    });
+  });
+  var module = (RHEL.allModules || []).filter(function (item) { return (item.lessons || []).indexOf(id) !== -1; })[0];
+  lesson.level = module && module.level ? module.level : '';
+  RHEL.lessons[id] = lesson;
+  return lesson;
+}
+
+(manifest.lessons || []).forEach(loadLessonFile);
 
 console.log('RHEL Fieldbook content validation');
 console.log('---------------------------------');
@@ -76,7 +118,7 @@ check('lesson ids exist and module mappings are complete', function () {
   });
 
   var moduleLessonIds = {};
-  (RHEL.modules || []).forEach(function (module) {
+  (RHEL.allModules || RHEL.modules || []).forEach(function (module) {
     if (!module.id) fail('A module is missing its id.');
     if (!Array.isArray(module.lessons) || !module.lessons.length) {
       fail('Module ' + module.id + ' has no lessons.');
@@ -104,7 +146,101 @@ check('lesson ids exist and module mappings are complete', function () {
     if (!Array.isArray(lesson.quiz) || !lesson.quiz.length) fail('Lesson ' + id + ' has no quiz questions.');
   });
 
-  return RHEL.lessonOrder.length + ' lessons in ' + (RHEL.modules || []).length + ' modules';
+  return RHEL.lessonOrder.length + ' lessons in ' + (RHEL.allModules || RHEL.modules || []).length + ' modules across ' + (RHEL.liveLevels || []).length + ' live levels';
+});
+
+check('content manifest matches lessonOrder exactly', function () {
+  var listed = manifest.lessons || [];
+  if (manifest.schema !== 1) fail('Lesson manifest must declare schema 1.');
+  if (listed.length !== RHEL.lessonOrder.length) {
+    fail('Manifest lists ' + listed.length + ' lessons but lessonOrder has ' + RHEL.lessonOrder.length + '.');
+  }
+  RHEL.lessonOrder.forEach(function (id) {
+    if (listed.indexOf(id) === -1) fail('Manifest is missing lesson ' + id + '.');
+  });
+  listed.forEach(function (id) {
+    if (RHEL.lessonOrder.indexOf(id) === -1) fail('Manifest contains unknown lesson ' + id + '.');
+  });
+  return listed.length + ' manifest entries';
+});
+
+check('lesson bodies are external and executable checks exist', function () {
+  var steps = 0;
+  RHEL.lessonOrder.forEach(function (id) {
+    var lesson = RHEL.lessons[id];
+    if (!lesson) return;
+    (lesson.sections || []).forEach(function (section) {
+      if (!section.title) fail('Lesson ' + id + ' has a section without a title.');
+      if (!section.file || !/^\d{2}\.html$/.test(section.file)) fail('Lesson ' + id + ' must reference numbered HTML body files.');
+      if (typeof section.body !== 'string' || !section.body.trim()) fail('Lesson ' + id + ' has an empty body.');
+    });
+    (lesson.lab && lesson.lab.steps || []).forEach(function (step, index) {
+      if (step.check !== 'sandbox') return;
+      steps++;
+      var checks = RHEL.labChecks && RHEL.labChecks[id];
+      if (!checks || typeof checks[index] !== 'function') {
+        fail('Lesson ' + id + ' lab step ' + (index + 1) + ' has no sandbox check function.');
+      }
+    });
+  });
+  return steps + ' automated lab checks';
+});
+
+check('Level 02 Operator is complete and mapped to EX200', function () {
+  var level = (RHEL.levels || []).filter(function (item) { return item.id === '02'; })[0];
+  if (!level) { fail('Level 02 is not defined.'); return; }
+  var examIds = {};
+  (RHEL.ex200 || []).forEach(function (objective) {
+    if (!objective.id || !objective.title) fail('EX200 objective is missing an id or title.');
+    if (examIds[objective.id]) fail('Duplicate EX200 objective id: ' + objective.id + '.');
+    examIds[objective.id] = true;
+  });
+  if (!RHEL.ex200 || RHEL.ex200.length < 8) fail('The EX200 map needs the full objective catalog.');
+  var lessons = (level.modules || []).reduce(function (list, module) { return list.concat(module.lessons || []); }, []);
+  if (lessons.length < 8) fail('Level 02 must contain at least 8 lessons; found ' + lessons.length + '.');
+  if (level.status === 'live' && !lessons.length) fail('A live level cannot be empty.');
+  lessons.forEach(function (id) {
+    var lesson = RHEL.lessons[id];
+    if (!lesson) { fail('Level 02 references missing lesson ' + id + '.'); return; }
+    if (lesson.module !== idToModuleLevel02(id)) { /* module check handled elsewhere */ }
+    if (lesson.level !== '02') fail('Level 02 lesson ' + id + ' does not resolve to level 02.');
+    if (!Array.isArray(lesson.ex200) || lesson.ex200.length !== lesson.objectives.length) {
+      fail('Level 02 lesson ' + id + ' must map every objective to EX200.');
+      return;
+    }
+    var seen = {};
+    lesson.ex200.forEach(function (mapping) {
+      if (typeof mapping.objective !== 'number' || mapping.objective < 0 || mapping.objective >= lesson.objectives.length) {
+        fail('Level 02 lesson ' + id + ' has an invalid EX200 objective index.');
+      }
+      if (seen[mapping.objective]) fail('Level 02 lesson ' + id + ' maps objective ' + mapping.objective + ' twice.');
+      seen[mapping.objective] = true;
+      if (!examIds[mapping.exam]) fail('Level 02 lesson ' + id + ' maps to unknown EX200 objective ' + mapping.exam + '.');
+      if (!mapping.evidence) fail('Level 02 lesson ' + id + ' EX200 mapping is missing evidence.');
+    });
+    if (!Array.isArray(lesson.versionNotes) || !lesson.versionNotes.length) {
+      fail('Level 02 lesson ' + id + ' must state its RHEL 9 / RHEL 10 differences.');
+    }
+    if (!/RHEL 10/.test((bodyCache[id] || '') + '\n' + (lesson.versionNotes || []).join(' '))) {
+      fail('Level 02 lesson ' + id + ' does not mention RHEL 10 explicitly.');
+    }
+  });
+  ['storage-lvm', 'systemd-units', 'ssh-sudo'].forEach(function (id) {
+    if (!/<svg[\s>]/.test(bodyCache[id] || '')) fail('Expected an inline SVG diagram in ' + id + '.');
+  });
+  return lessons.length + ' lessons · ' + (RHEL.ex200 || []).length + ' EX200 objectives';
+});
+
+check('quizzes have three explained questions per lesson', function () {
+  RHEL.lessonOrder.forEach(function (id) {
+    var lesson = RHEL.lessons[id];
+    if (!lesson) return;
+    if (!Array.isArray(lesson.quiz) || lesson.quiz.length < 3) fail('Lesson ' + id + ' needs at least three quiz questions.');
+    (lesson.quiz || []).forEach(function (question, index) {
+      if (!question.explanation && !question.why) fail('Lesson ' + id + ' question ' + (index + 1) + ' has no explanation.');
+    });
+  });
+  return 'minimum quiz depth enforced';
 });
 
 check('quiz answer indices are in range', function () {

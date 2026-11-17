@@ -1,0 +1,19 @@
+<p>Temporary mounts are useful for inspection and recovery. Persistent mounts belong in <code>/etc/fstab</code>, and the safe way to reference a filesystem is by <strong>UUID</strong>, not by a device name that can change.</p>
+        <div class="code-label"><span>terminal · mount by UUID</span></div>
+        <pre><code>sudo mkdir -p /mnt/data
+sudo blkid /dev/sdb1
+sudo mount UUID="8f3c1e2a-..." /mnt/data
+findmnt /mnt/data
+sudo umount /mnt/data</code></pre>
+        <p>If <code>umount</code> reports "target is busy," find out what is using it before forcing anything:</p>
+        <div class="code-label"><span>terminal · who is using the mount?</span></div>
+        <pre><code>sudo lsof +D /mnt/data
+sudo fuser -vm /mnt/data</code></pre>
+        <p>A common cause is a shell whose current directory is inside the mount. <code>cd</code> out, close the process, then unmount. <code>umount -l</code> (lazy) and <code>umount -f</code> (force) exist, but they are recovery tools, not first choices.</p>
+        <div class="code-label"><span>/etc/fstab fields</span></div>
+        <pre><code>UUID=8f3c1e2a-...  /data  xfs  defaults  0 0</code></pre>
+        <p>The six fields are: device, mount point, filesystem type, options, dump flag, and fsck pass. On XFS, the sixth field is typically <code>0</code>; XFS does not use the traditional fsck pass model in the same way as ext4.</p>
+        <div class="callout warn">
+          <div class="callout-title">Test fstab before rebooting</div>
+          <p>A typo in <code>/etc/fstab</code> can drop the system into emergency mode. Run <code>sudo mount -a</code> after editing; if it succeeds without error, your syntax and UUID are at least plausible. Keep console access.</p>
+        </div>

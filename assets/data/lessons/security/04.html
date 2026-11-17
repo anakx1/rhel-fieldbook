@@ -1,0 +1,14 @@
+<p>Security is not a pile of tools. It is a set of choices you can defend. Start with these, and write down why each one exists in your environment:</p>
+        <ul>
+          <li><strong>Identity</strong> — unique accounts, no shared root, sudo for privilege, MFA where supported.</li>
+          <li><strong>Access</strong> — SSH keys, root login disabled, only required ports open, firewall enforcing.</li>
+          <li><strong>Updates</strong> — subscribed repositories, a patch cadence, and a rollback path.</li>
+          <li><strong>Mandatory controls</strong> — SELinux enforcing, crypto policy appropriate to the data, auditd enabled.</li>
+          <li><strong>Detection</strong> — centralized logs, failed-unit alerts, authentication monitoring, file-integrity checks.</li>
+          <li><strong>Recovery</strong> — tested backups, documented restore, and a break-glass console procedure.</li>
+        </ul>
+        <p>RHEL provides tools to evaluate the baseline: <code>oscap</code> with the SCAP Security Guide, <code>aide</code> for file integrity, and <code>auditd</code> for system-call auditing. You will use them in the Administrator level. For now, learn to keep SELinux and firewalld on and to read what they tell you.</p>
+        <div class="callout tip">
+          <div class="callout-title">The best security change is small</div>
+          <p>One narrow sudo rule, one open port, one correct context. Broad changes are hard to review and harder to reverse. Make the smallest change that solves the actual problem.</p>
+        </div>

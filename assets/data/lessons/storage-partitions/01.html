@@ -1,0 +1,14 @@
+<p>Storage is easier when you keep three questions separate. Which <strong>block device</strong> exists? What <strong>filesystem</strong> is written on it? Where is that filesystem <strong>mounted</strong>? A partition is only a boundary; it is not a filesystem, and it is not usable by path until it is mounted.</p>
+<div class="code-label"><span>terminal · read all three layers</span></div>
+<pre><code>lsblk -f
+blkid
+findmnt
+df -hT</code></pre>
+<p><code>lsblk -f</code> is the fastest overview: device tree, filesystem type, label, UUID, and mount point. <code>findmnt</code> shows the mount tree and options. <code>df</code> reports capacity, while <code>du</code> reports consumption inside a directory. They answer different questions and should disagree in healthy ways.</p>
+<div class="table-wrap"><table><thead><tr><th>Layer</th><th>Question</th><th>Truth source</th></tr></thead><tbody>
+<tr><td>Block device</td><td>What disks and partitions exist?</td><td><code>lsblk</code>, <code>/proc/partitions</code></td></tr>
+<tr><td>Partition table</td><td>Where are the boundaries?</td><td><code>parted print</code>, <code>fdisk -l</code></td></tr>
+<tr><td>Filesystem</td><td>What is formatted here?</td><td><code>blkid</code>, <code>lsblk -f</code></td></tr>
+<tr><td>Mount</td><td>Where is it attached, and with what policy?</td><td><code>findmnt</code>, <code>mount</code></td></tr>
+</tbody></table></div>
+<div class="callout tip"><div class="callout-title">Read before you write</div><p>Before formatting or partitioning, prove which device you are touching. A typo in a device name is not a recoverable interface; it is a data-loss event.</p></div>

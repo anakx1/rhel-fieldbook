@@ -1,0 +1,16 @@
+<p>RHEL uses a <strong>single-rooted filesystem</strong>. There are no drive letters. Every file and directory lives somewhere beneath <code>/</code>, including removable media and network shares, which are attached to a directory called a <strong>mount point</strong>.</p>
+        <p>The shell is always sitting in a <strong>current working directory</strong>. <code>pwd</code> prints it. <code>cd</code> changes it. <code>ls</code> lists what is there. These three commands are the floor plan of everything else.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Path</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>/</code></td><td>The root of the entire tree.</td></tr>
+              <tr><td><code>.</code></td><td>The current directory.</td></tr>
+              <tr><td><code>..</code></td><td>The parent directory.</td></tr>
+              <tr><td><code>~</code></td><td>The current user's home directory.</td></tr>
+              <tr><td><code>~student</code></td><td>The home directory of user student.</td></tr>
+              <tr><td><code>-</code></td><td>The previous working directory, for <code>cd -</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>An <strong>absolute path</strong> starts with <code>/</code> and means the same thing from anywhere: <code>/var/log/messages</code>. A <strong>relative path</strong> is interpreted from where you are now: <code>logs/messages</code> only works if you are already in <code>/var</code>. When a script must be unambiguous, prefer absolute paths and quote them.</p>

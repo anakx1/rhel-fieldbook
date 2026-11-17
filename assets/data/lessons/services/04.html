@@ -1,0 +1,11 @@
+<p>A <strong>target</strong> is a boot milestone. The default on a server is usually <code>multi-user.target</code>; a graphical desktop uses <code>graphical.target</code>. Targets replace the old runlevel model but are not just renamed runlevels.</p>
+        <div class="code-label"><span>terminal · inspect boot state</span></div>
+        <pre><code>systemctl get-default
+systemctl list-units --type=target
+systemctl --failed
+systemctl list-units --type=service --state=running</code></pre>
+        <p><code>systemctl --failed</code> is one of the highest-value commands on a new system. It shows units that tried and failed, even if the rest of the boot succeeded. Investigate with <code>systemctl status</code> and <code>journalctl -u</code>.</p>
+        <p>To change the default target:</p>
+        <div class="code-label"><span>terminal · change default boot target</span></div>
+        <pre><code>sudo systemctl set-default multi-user.target</code></pre>
+        <p>Do not use <code>systemctl isolate</code> casually on a remote production host. Isolating a target stops units that are not part of the new target, which can terminate your access. In later levels you will practice recovery in a lab with console access.</p>

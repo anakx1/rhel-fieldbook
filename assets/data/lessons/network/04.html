@@ -1,0 +1,14 @@
+<p>RHEL ships with <strong>firewalld</strong> enabled. It is not an obstacle to work around; it is part of the service deployment. Open only the service or port that is required.</p>
+        <div class="code-label"><span>terminal · inspect and open a service</span></div>
+        <pre><code>sudo firewall-cmd --state
+sudo firewall-cmd --get-active-zones
+sudo firewall-cmd --list-all
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --reload
+sudo firewall-cmd --list-services</code></pre>
+        <p><code>--permanent</code> writes to the persistent configuration. Without it, the change is runtime-only and disappears on reload or reboot. Many "it worked yesterday" firewall stories are missing <code>--permanent</code>; many "it still doesn't work" stories are missing <code>--reload</code>.</p>
+        <p>For a nonstandard port, add it explicitly: <code>--add-port=8080/tcp</code>. Prefer service definitions when available because they carry the correct ports and protocol semantics. Disabling the firewall to test is a bad habit that eventually reaches production.</p>
+        <div class="callout warn">
+          <div class="callout-title">Do not stop firewalld to prove a point</div>
+          <p>If stopping the firewall "fixes" the problem, you have learned that the rule set is involved. Now inspect zones, services, ports, and source addresses — and add the narrowest rule that works.</p>
+        </div>
