@@ -48,7 +48,7 @@ test('command palette searches lessons and commands', async ({ page }) => {
   await expect(palette).toBeVisible();
   await page.locator('#palette-input').fill('logical volume');
   await expect(page.locator('.palette-item').first()).toBeVisible();
-  await expect(page.locator('.palette-item').first()).toContainText(/LVM|volume/i);
+  await expect(page.locator('#palette-results')).toContainText(/LVM|logical volume/i);
   await page.keyboard.press('Escape');
   await expect(palette).toBeHidden();
 });
